@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>流派评分雷达图 · 详情页</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background:#000;
+      color:#fff;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:24px 16px 40px;
+      position:relative;
+      overflow-x:hidden;
+    }
+    .checkerboard {
+      position:fixed; inset:0; z-index:0; overflow:hidden;
+    }
+    .distortion {
+      position:absolute; inset:0;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size:40px 40px;
+      opacity:.85;
+      transform:scale(1.5);
+      animation:wave 8s ease-in-out infinite alternate;
+    }
+    @keyframes wave{
+      0%{transform:scale(1.5) rotate(0deg);}
+      100%{transform:scale(1.7) rotate(8deg);}
+    }
+    .page-inner{ position:relative; z-index:1; width:100%; max-width:1400px; }
+
+    .header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+    .header-title{
+      font-size:18px;
+      text-shadow:3px 3px 0 #ff4500;
+    }
+    .header-right a{
+      font-size:10px;
+      color:#ADFF2F;
+      text-decoration:none;
+    }
+    .header-right a:hover{ text-decoration:underline; }
+
+    .filter-bar{
+      margin-bottom:18px;
+      padding:10px 16px;
+      border-radius:16px;
+      background:rgba(0,0,0,.6);
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px 16px;
+      align-items:center;
+      justify-content:flex-start;
+      font-size:10px;
+      color:#ADFF2F;
+      box-shadow:0 0 16px rgba(0,0,0,.6);
+    }
+    .filter-bar select{
+      font-family:inherit;
+      font-size:10px;
+      padding:5px 10px;
+      border-radius:10px;
+      border:1px solid #444;
+      background:#FFFAF0;
+      color:#000;
+      box-shadow:0 0 8px rgba(0,0,0,.5);
+      cursor:pointer;
+    }
+    .chart-card{
+      background:rgba(255,251,244,.96);
+      border-radius:28px;
+      box-shadow:0 16px 40px rgba(0,0,0,.4);
+      padding:20px 24px 24px;
+      color:#333;
+      display:flex;
+      flex-direction:column;
+    }
+    .chart-title{
+      font-size:13px;
+      margin-bottom:14px;
+      color:#333;
+    }
+    .chart-wrapper{
+      flex:1;
+      position:relative;
+      aspect-ratio:16/9;
+      min-height:500px;
+    }
+    .chart-wrapper svg{ width:100%; height:100%; display:block; }
+
+    .tooltip{
+      position:absolute;
+      background:rgba(255,255,255,.97);
+      border:1px solid #ccc;
+      padding:8px 12px;
+      font-size:12px;
+      pointer-events:none;
+      border-radius:4px;
+      box-shadow:0 0 6px rgba(0,0,0,.35);
+      color:#333;
+      z-index:99;
+    }
+    .footer{
+      margin-top:14px;
+      text-align:center;
+      font-size:9px;
+      color:#ADFF2F;
+    }
+
+    @media(max-width:900px){
+      .chart-wrapper{ aspect-ratio:4/3; min-height:400px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="checkerboard"><div class="distortion"></div></div>
+
+  <div class="page-inner">
+    <header class="header">
+      <h1 class="header-title">GENRE RADAR · DETAIL VIEW</h1>
+      <div class="header-right">
+        <a href="charts_hub.html">← 返回总览</a>
+      </div>
+    </header>
+
+    <div class="filter-bar">
+      <span>年代选择：</span>
+      <select id="decadeSelect">
+        <option value="all">全部年代平均</option>
+      </select>
+
+      <span>显示流派数：</span>
+      <select id="genreCount">
+        <option value="6">前6名</option>
+        <option value="8" selected>前8名</option>
+        <option value="10">前10名</option>
+        <option value="12">前12名</option>
+      </select>
+    </div>
+
+    <div class="chart-card">
+      <h3 class="chart-title">流派评分雷达对比 - 展示不同音乐流派的平均评分</h3>
+      <div class="chart-wrapper" id="chart"></div>
+    </div>
+
+    <div class="footer">
+      数据来源：<a href="https://rateyourmusic.com" target="_blank" style="color:#ADFF2F;">RateYourMusic</a> ·
+      © 2025 Group NiuMa
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    const DATA_FILE = "genre_rating_data.json";
+    let radarData = null;
+    let currentDecade = "all";
+    let currentGenreCount = 8;
+
+    const tooltip = d3.select("#tooltip");
+
+    // 加载数据
+    d3.json(DATA_FILE).then(data => {
+      radarData = data;
+      console.log("✅ 数据加载完成", radarData);
+      
+      initFilters();
+      renderChart();
+    }).catch(err => {
+      console.error("❌ 数据加载失败:", err);
+      d3.select("#chart").append("p")
+        .style("font-size", "14px")
+        .style("color", "#666")
+        .text("数据加载失败，请检查文件路径");
+    });
+
+    function initFilters() {
+      const decadeSelect = d3.select("#decadeSelect");
+      const genreCountSelect = d3.select("#genreCount");
+
+      // 填充年代选项
+      radarData.forEach(d => {
+        if (d.genres && d.genres.length > 0) {
+          decadeSelect.append("option")
+            .attr("value", d.decade)
+            .text(d.decade);
+        }
+      });
+
+      decadeSelect.on("change", () => {
+        currentDecade = decadeSelect.property("value");
+        renderChart();
+      });
+
+      genreCountSelect.on("change", () => {
+        currentGenreCount = +genreCountSelect.property("value");
+        renderChart();
+      });
+    }
+
+    function renderChart() {
+      const container = d3.select("#chart");
+      container.selectAll("*").remove();
+
+      if (!radarData) {
+        container.append("p")
+          .style("font-size", "14px")
+          .text("数据加载失败");
+        return;
+      }
+
+      const margin = { top: 60, right: 120, bottom: 60, left: 120 };
+      const containerNode = container.node();
+      const containerWidth = containerNode.clientWidth;
+      const containerHeight = containerNode.clientHeight;
+
+      const width = containerWidth - margin.left - margin.right;
+      const height = containerHeight - margin.top - margin.bottom;
+      const radius = Math.min(width, height) / 2;
+
+      const svg = container.append("svg")
+        .attr("width", containerWidth)
+        .attr("height", containerHeight);
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${containerWidth / 2},${containerHeight / 2})`);
+
+      // 根据筛选条件获取数据
+      let decadeData;
+      if (currentDecade === "all") {
+        // 显示所有年代的平均
+        decadeData = { decade: "all", genres: [] };
+        const genreMap = {};
+        
+        radarData.forEach(d => {
+          d.genres.forEach(g => {
+            if (!genreMap[g.genre]) {
+              genreMap[g.genre] = { genre: g.genre, ratings: [], count: 0 };
+            }
+            genreMap[g.genre].ratings.push(g.avg_rating);
+            genreMap[g.genre].count++;
+          });
+        });
+
+        decadeData.genres = Object.values(genreMap).map(g => ({
+          genre: g.genre,
+          avg_rating: d3.mean(g.ratings)
+        })).filter(g => g.avg_rating); // 过滤掉无效数据
+      } else {
+        // 显示特定年代
+        decadeData = radarData.find(d => d.decade === currentDecade);
+      }
+
+      if (!decadeData || !decadeData.genres || decadeData.genres.length === 0) {
+        container.append("p")
+          .style("font-size", "14px")
+          .text("当前年代无数据");
+        return;
+      }
+
+      // 选择评分最高的前N个流派
+      const topGenres = decadeData.genres
+        .sort((a, b) => b.avg_rating - a.avg_rating)
+        .slice(0, currentGenreCount);
+
+      const levels = 5;
+      const minRating = 3.6;
+      const maxRating = 4.0;
+
+      // 创建径向比例尺
+      const rScale = d3.scaleLinear()
+        .domain([minRating, maxRating])
+        .range([0, radius]);
+
+      // 创建角度比例尺
+      const angleSlice = (Math.PI * 2) / topGenres.length;
+
+      // 标题
+      g.append("text")
+        .attr("x", 0)
+        .attr("y", -radius - 30)
+        .attr("text-anchor", "middle")
+        .style("font-size", "16px")
+        .style("font-weight", "bold")
+        .style("fill", "#333")
+        .text(`${currentDecade === "all" ? "全部年代" : currentDecade} - Top ${currentGenreCount} 流派评分`);
+
+      // 绘制同心圆网格
+      const axisGrid = g.append("g").attr("class", "axisWrapper");
+
+      // 绘制同心圆
+      axisGrid.selectAll(".gridCircle")
+        .data(d3.range(1, levels + 1).reverse())
+        .enter()
+        .append("circle")
+        .attr("class", "gridCircle")
+        .attr("r", d => (radius / levels) * d)
+        .style("fill", "#f5f5f5")
+        .style("stroke", "#ccc")
+        .style("stroke-width", "1.5px")
+        .style("fill-opacity", 0.3);
+
+      // 绘制坐标轴线
+      const axis = axisGrid.selectAll(".axis")
+        .data(topGenres)
+        .enter()
+        .append("g")
+        .attr("class", "axis");
+
+      axis.append("line")
+        .attr("x1", 0)
+        .attr("y1", 0)
+        .attr("x2", (d, i) => rScale(maxRating) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y2", (d, i) => rScale(maxRating) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("stroke", "#999")
+        .style("stroke-width", "1.5px");
+
+      // 添加坐标轴标签
+      axis.append("text")
+        .attr("class", "legend")
+        .style("font-size", "12px")
+        .style("font-weight", "bold")
+        .style("fill", "#333")
+        .attr("text-anchor", "middle")
+        .attr("dy", "0.35em")
+        .attr("x", (d, i) => (rScale(maxRating) + 25) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y", (d, i) => (rScale(maxRating) + 25) * Math.sin(angleSlice * i - Math.PI / 2))
+        .text(d => d.genre);
+
+      // 准备雷达图数据
+      const radarLine = d3.lineRadial()
+        .radius(d => rScale(d.avg_rating))
+        .angle((d, i) => i * angleSlice)
+        .curve(d3.curveLinearClosed);
+
+      // 绘制雷达图区域
+      const radarArea = g.append("path")
+        .datum(topGenres)
+        .attr("d", radarLine)
+        .style("fill", "#ff7f0e")
+        .style("fill-opacity", 0.5)
+        .style("stroke", "#ff7f0e")
+        .style("stroke-width", "3px");
+
+      // 绘制数据点
+      const dots = g.selectAll(".radarCircle")
+        .data(topGenres)
+        .enter()
+        .append("circle")
+        .attr("class", "radarCircle")
+        .attr("r", 5)
+        .attr("cx", (d, i) => rScale(d.avg_rating) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("cy", (d, i) => rScale(d.avg_rating) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("fill", "#ff7f0e")
+        .style("stroke", "#fff")
+        .style("stroke-width", "2px")
+        .style("cursor", "pointer");
+
+      // 添加交互
+      dots.on("mouseover", function(event, d) {
+          d3.select(this).attr("r", 8);
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               平均评分：${d.avg_rating.toFixed(3)}<br/>
+               年代：${currentDecade === "all" ? "全部年代" : currentDecade}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("r", 5);
+          tooltip.style("opacity", 0);
+        });
+
+      // 添加评分刻度标签
+      const ratingLabels = g.append("g").attr("class", "rating-labels");
+      
+      d3.range(1, levels + 1).forEach(level => {
+        const rating = minRating + (maxRating - minRating) * (level / levels);
+        ratingLabels.append("text")
+          .attr("x", 8)
+          .attr("y", -rScale(rating) + 4)
+          .style("font-size", "11px")
+          .style("fill", "#666")
+          .style("font-weight", "bold")
+          .text(rating.toFixed(2));
+      });
+
+      // 添加说明文字
+      g.append("text")
+        .attr("x", 0)
+        .attr("y", radius + 40)
+        .attr("text-anchor", "middle")
+        .style("font-size", "11px")
+        .style("fill", "#666")
+        .text("评分范围：3.60 - 4.00 分");
+    }
+  </script>
+</body>
+</html>

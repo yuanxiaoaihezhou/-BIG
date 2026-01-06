@@ -341,7 +341,7 @@
 
       <section class="chart-card" id="card-stacked">
         <h3 class="chart-card-title pixel-text">
-          <span>CHART 05</span>流派演变堆叠面积图
+          <span>CHART 05</span>流派评分雷达图
         </h3>
         <div class="chart-wrapper" id="chart-stacked"></div>
       </section>
@@ -362,13 +362,13 @@
     /************** 1. 全局数据 & 筛选状态 **************/
     const CSV_FILE = "rym_top_5000_all_time.csv";
     const WORDCLOUD_DATA_FILE = "decade_word_data.json";
-    const STACKED_DATA_FILE = "data/music_analysis_data.json";
+    const RADAR_DATA_FILE = "genre_rating_data.json";
 
     let allData = [];
     let currentDecade = "all";
     let currentMinGenreCount = 20;
     let wordData = {};
-    let stackedData = null;
+    let radarData = null;
     let resizeTimeout = null;
 
     const tooltip = d3.select("#tooltip");
@@ -377,18 +377,18 @@
     const colorScale = d3.scaleOrdinal()
       .range(d3.schemeCategory10);
 
-    // 先加载CSV数据，再加载词云数据和堆叠图数据
+    // 先加载CSV数据，再加载词云数据和雷达图数据
     Promise.all([
       d3.csv(CSV_FILE),
       d3.json(WORDCLOUD_DATA_FILE).catch(error => {
         console.error("❌ 词频数据加载失败:", error);
         return null;
       }),
-      d3.json(STACKED_DATA_FILE).catch(error => {
-        console.error("❌ 堆叠图数据加载失败:", error);
+      d3.json(RADAR_DATA_FILE).catch(error => {
+        console.error("❌ 雷达图数据加载失败:", error);
         return null;
       })
-    ]).then(([csvData, wordJsonData, stackedJsonData]) => {
+    ]).then(([csvData, wordJsonData, radarJsonData]) => {
       // 处理CSV数据
       allData = csvData.map(d => {
         const rating = +d["Average Rating"];
@@ -438,10 +438,10 @@
         console.log("✅ 词频数据加载并清洗完成", wordData);
       }
 
-      // 处理堆叠图数据
-      if (stackedJsonData) {
-        stackedData = stackedJsonData;
-        console.log("✅ 堆叠图数据加载完成", stackedData);
+      // 处理雷达图数据
+      if (radarJsonData) {
+        radarData = radarJsonData;
+        console.log("✅ 雷达图数据加载完成", radarData);
       }
 
       initFilters();
@@ -533,7 +533,7 @@
       renderScatterChart(filtered);
       renderHeatmap(filtered, currentMinGenreCount);
       updateWordCloud(currentDecade); // 同步更新词云
-      renderStackedAreaChart(currentDecade); // 同步更新堆叠面积图
+      renderRadarChart(currentDecade); // 同步更新雷达图
     }
 
     /************** 2. 折线图：按年份数量 & 平均评分 **************/
@@ -1296,114 +1296,165 @@
       }
     }
 
-    /************** 6. 堆叠面积图：流派演变 **************/
-    function renderStackedAreaChart(decade) {
+    /************** 6. 雷达图：流派评分对比 **************/
+    function renderRadarChart(decade) {
       const container = d3.select("#chart-stacked");
       container.selectAll("*").remove();
 
-      if (!stackedData || !stackedData.percentage_data) {
+      if (!radarData) {
         container.append("p")
           .style("font-size", "11px")
           .text("数据加载失败");
         return;
       }
 
-      const margin = { top: 30, right: 20, bottom: 40, left: 50 };
+      const margin = { top: 40, right: 80, bottom: 40, left: 80 };
       const innerWidth = 400;
       const innerHeight = 280;
 
       const width = innerWidth - margin.left - margin.right;
       const height = innerHeight - margin.top - margin.bottom;
+      const radius = Math.min(width, height) / 2;
 
       const svg = container.append("svg")
         .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
         .attr("preserveAspectRatio", "xMidYMid meet");
 
       const g = svg.append("g")
-        .attr("transform", `translate(${margin.left},${margin.top})`);
+        .attr("transform", `translate(${innerWidth / 2},${innerHeight / 2})`);
 
-      // 根据筛选条件过滤数据
-      let percentageData = stackedData.percentage_data;
-      if (decade !== "all") {
-        // 如果选择了特定年代，只显示该年代的数据
-        const selectedDecade = decade.endsWith("s") ? decade : decade + "s";
-        percentageData = percentageData.filter(d => d.decade === selectedDecade);
+      // 根据筛选条件获取数据
+      let decadeData;
+      if (decade === "all") {
+        // 显示所有年代的平均
+        decadeData = { decade: "all", genres: [] };
+        const genreMap = {};
         
-        if (percentageData.length === 0) {
-          container.append("p")
-            .style("font-size", "11px")
-            .text("当前年代无数据");
-          return;
-        }
+        radarData.forEach(d => {
+          d.genres.forEach(g => {
+            if (!genreMap[g.genre]) {
+              genreMap[g.genre] = { genre: g.genre, ratings: [], count: 0 };
+            }
+            genreMap[g.genre].ratings.push(g.avg_rating);
+            genreMap[g.genre].count++;
+          });
+        });
+
+        decadeData.genres = Object.values(genreMap).map(g => ({
+          genre: g.genre,
+          avg_rating: d3.mean(g.ratings)
+        })).filter(g => g.avg_rating); // 过滤掉无效数据
+      } else {
+        // 显示特定年代
+        const selectedDecade = decade.endsWith("s") ? decade : decade + "s";
+        decadeData = radarData.find(d => d.decade === selectedDecade);
       }
 
-      const genres = stackedData.genres;
-      const decades = percentageData.map(d => d.decade);
+      if (!decadeData || !decadeData.genres || decadeData.genres.length === 0) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("当前年代无数据");
+        return;
+      }
 
-      // 准备堆叠数据
-      const stack = d3.stack()
-        .keys(genres)
-        .order(d3.stackOrderNone)
-        .offset(d3.stackOffsetNone);
+      // 选择评分最高的前8个流派
+      const topGenres = decadeData.genres
+        .sort((a, b) => b.avg_rating - a.avg_rating)
+        .slice(0, 8);
 
-      const series = stack(percentageData);
+      const levels = 5;
+      const minRating = 3.6;
+      const maxRating = 4.0;
 
-      // 比例尺
-      const xScale = d3.scaleBand()
-        .domain(decades)
-        .range([0, width])
-        .padding(0.1);
+      // 创建径向比例尺
+      const rScale = d3.scaleLinear()
+        .domain([minRating, maxRating])
+        .range([0, radius]);
 
-      const yScale = d3.scaleLinear()
-        .domain([0, 100])
-        .range([height, 0]);
+      // 创建角度比例尺
+      const angleSlice = (Math.PI * 2) / topGenres.length;
 
-      // 颜色比例尺 - 使用与热力图一致的配色
-      const colorScale = d3.scaleOrdinal()
-        .domain(genres)
-        .range([
-          "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-          "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22"
-        ]);
+      // 绘制同心圆网格
+      const axisGrid = g.append("g").attr("class", "axisWrapper");
 
-      // 面积生成器
-      const area = d3.area()
-        .x(d => xScale(d.data.decade) + xScale.bandwidth() / 2)
-        .y0(d => yScale(d[0]))
-        .y1(d => yScale(d[1]))
-        .curve(d3.curveMonotoneX);
-
-      // 绘制堆叠面积
-      g.selectAll(".layer")
-        .data(series)
+      // 绘制同心圆
+      axisGrid.selectAll(".gridCircle")
+        .data(d3.range(1, levels + 1).reverse())
         .enter()
-        .append("path")
-        .attr("class", "layer")
-        .attr("d", area)
-        .attr("fill", d => colorScale(d.key))
-        .attr("opacity", 0.8)
-        .on("mouseover", function(event, d) {
-          d3.select(this).attr("opacity", 1);
-          
-          // 获取鼠标位置对应的年代
-          const [mouseX] = d3.pointer(event, g.node());
-          const decadeIndex = Math.min(Math.max(0, Math.floor(mouseX / (width / decades.length))), decades.length - 1);
-          
-          if (decadeIndex >= 0 && decadeIndex < d.length) {
-            const dataPoint = d[decadeIndex];
-            const genreName = d.key;
-            const percentage = dataPoint.data[genreName];
-            
-            tooltip
-              .style("opacity", 1)
-              .html(
-                `<strong>${genreName}</strong><br/>
-                 年代：${dataPoint.data.decade}<br/>
-                 占比：${percentage !== undefined ? percentage.toFixed(2) : 0}%`
-              )
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY + 10) + "px");
-          }
+        .append("circle")
+        .attr("class", "gridCircle")
+        .attr("r", d => (radius / levels) * d)
+        .style("fill", "#f5f5f5")
+        .style("stroke", "#ccc")
+        .style("stroke-width", "1px")
+        .style("fill-opacity", 0.3);
+
+      // 绘制坐标轴线
+      const axis = axisGrid.selectAll(".axis")
+        .data(topGenres)
+        .enter()
+        .append("g")
+        .attr("class", "axis");
+
+      axis.append("line")
+        .attr("x1", 0)
+        .attr("y1", 0)
+        .attr("x2", (d, i) => rScale(maxRating) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y2", (d, i) => rScale(maxRating) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("stroke", "#999")
+        .style("stroke-width", "1px");
+
+      // 添加坐标轴标签
+      axis.append("text")
+        .attr("class", "legend")
+        .style("font-size", "9px")
+        .style("fill", "#333")
+        .attr("text-anchor", "middle")
+        .attr("dy", "0.35em")
+        .attr("x", (d, i) => (rScale(maxRating) + 15) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y", (d, i) => (rScale(maxRating) + 15) * Math.sin(angleSlice * i - Math.PI / 2))
+        .text(d => d.genre.length > 10 ? d.genre.substring(0, 10) + "..." : d.genre);
+
+      // 准备雷达图数据
+      const radarLine = d3.lineRadial()
+        .radius(d => rScale(d.avg_rating))
+        .angle((d, i) => i * angleSlice)
+        .curve(d3.curveLinearClosed);
+
+      // 绘制雷达图区域
+      const radarArea = g.append("path")
+        .datum(topGenres)
+        .attr("d", radarLine)
+        .style("fill", "#ff7f0e")
+        .style("fill-opacity", 0.4)
+        .style("stroke", "#ff7f0e")
+        .style("stroke-width", "2px");
+
+      // 绘制数据点
+      const dots = g.selectAll(".radarCircle")
+        .data(topGenres)
+        .enter()
+        .append("circle")
+        .attr("class", "radarCircle")
+        .attr("r", 4)
+        .attr("cx", (d, i) => rScale(d.avg_rating) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("cy", (d, i) => rScale(d.avg_rating) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("fill", "#ff7f0e")
+        .style("stroke", "#fff")
+        .style("stroke-width", "2px");
+
+      // 添加交互
+      dots.on("mouseover", function(event, d) {
+          d3.select(this).attr("r", 6);
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               平均评分：${d.avg_rating.toFixed(3)}<br/>
+               年代：${decade === "all" ? "全部年代" : decade}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
         })
         .on("mousemove", (event) => {
           tooltip
@@ -1411,66 +1462,22 @@
             .style("top", (event.pageY + 10) + "px");
         })
         .on("mouseout", function() {
-          d3.select(this).attr("opacity", 0.8);
+          d3.select(this).attr("r", 4);
           tooltip.style("opacity", 0);
         });
 
-      // X轴
-      g.append("g")
-        .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(xScale))
-        .selectAll("text")
-        .style("font-size", "9px")
-        .attr("transform", "rotate(-20)")
-        .style("text-anchor", "end");
-
-      // Y轴
-      g.append("g")
-        .call(d3.axisLeft(yScale).ticks(5).tickFormat(d => d + "%"))
-        .selectAll("text")
-        .style("font-size", "9px");
-
-      // X轴标签
-      g.append("text")
-        .attr("x", width / 2)
-        .attr("y", height + 36)
-        .attr("text-anchor", "middle")
-        .style("font-size", "10px")
-        .text("年代");
-
-      // Y轴标签
-      g.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -height / 2)
-        .attr("y", -35)
-        .attr("text-anchor", "middle")
-        .style("font-size", "10px")
-        .text("流派占比 (%)");
-
-      // 图例
-      const MAX_LEGEND_TEXT_LENGTH = 12;
-      const legend = g.append("g")
-        .attr("transform", `translate(${width - 140}, 0)`);
-
-      const legendItems = legend.selectAll(".legend-item")
-        .data(genres)
-        .enter()
-        .append("g")
-        .attr("class", "legend-item")
-        .attr("transform", (d, i) => `translate(0, ${i * 14})`);
-
-      legendItems.append("rect")
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", 10)
-        .attr("height", 10)
-        .attr("fill", d => colorScale(d));
-
-      legendItems.append("text")
-        .attr("x", 14)
-        .attr("y", 9)
-        .style("font-size", "8px")
-        .text(d => d.length > MAX_LEGEND_TEXT_LENGTH ? d.substring(0, MAX_LEGEND_TEXT_LENGTH) + "..." : d);
+      // 添加评分刻度标签
+      const ratingLabels = g.append("g").attr("class", "rating-labels");
+      
+      d3.range(1, levels + 1).forEach(level => {
+        const rating = minRating + (maxRating - minRating) * (level / levels);
+        ratingLabels.append("text")
+          .attr("x", 5)
+          .attr("y", -rScale(rating))
+          .style("font-size", "8px")
+          .style("fill", "#666")
+          .text(rating.toFixed(2));
+      });
     }
 
     // === 点击卡片跳转到各自的详情页 ===
@@ -1507,7 +1514,7 @@
 
       if (stackedCard) {
         stackedCard.addEventListener("click", () => {
-          window.location.href = "stacked_detail.html";
+          window.location.href = "radar_detail.html";
         });
       }
     });
