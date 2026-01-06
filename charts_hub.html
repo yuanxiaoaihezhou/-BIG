@@ -1387,18 +1387,18 @@
           
           // 获取鼠标位置对应的年代
           const [mouseX] = d3.pointer(event, g.node());
-          const decadeIndex = Math.floor(mouseX / (width / decades.length));
-          const decadeData = d.data ? d.data : (d[decadeIndex] ? d[decadeIndex].data : null);
+          const decadeIndex = Math.min(Math.max(0, Math.floor(mouseX / (width / decades.length))), decades.length - 1);
           
-          if (decadeData) {
+          if (decadeIndex >= 0 && decadeIndex < d.length) {
+            const dataPoint = d[decadeIndex];
             const genreName = d.key;
-            const percentage = decadeData[genreName];
+            const percentage = dataPoint.data[genreName];
             
             tooltip
               .style("opacity", 1)
               .html(
                 `<strong>${genreName}</strong><br/>
-                 年代：${decadeData.decade}<br/>
+                 年代：${dataPoint.data.decade}<br/>
                  占比：${percentage ? percentage.toFixed(2) : 0}%`
               )
               .style("left", (event.pageX + 10) + "px")
