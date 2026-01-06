@@ -225,7 +225,7 @@
 
       const width = containerWidth - margin.left - margin.right;
       const height = containerHeight - margin.top - margin.bottom;
-      const radius = Math.min(width, height) / 2;
+      const radius = Math.min(width, height) / 2.5; // 缩小雷达图以避免标签覆盖
 
       const svg = container.append("svg")
         .attr("width", containerWidth)
@@ -284,13 +284,13 @@
       // 创建角度比例尺
       const angleSlice = (Math.PI * 2) / topGenres.length;
 
-      // 标题
+      // 标题 - 使用像素风格字体保持一致
       g.append("text")
         .attr("x", 0)
-        .attr("y", -radius - 30)
+        .attr("y", -radius - 50)
         .attr("text-anchor", "middle")
-        .style("font-size", "16px")
-        .style("font-weight", "bold")
+        .style("font-size", "13px")
+        .style("font-family", "'Press Start 2P', monospace")
         .style("fill", "#333")
         .text(`${currentDecade === "all" ? "全部年代" : currentDecade} - Top ${currentGenreCount} 流派评分`);
 
@@ -327,13 +327,13 @@
       // 添加坐标轴标签
       axis.append("text")
         .attr("class", "legend")
-        .style("font-size", "12px")
+        .style("font-size", "11px")
         .style("font-weight", "bold")
         .style("fill", "#333")
         .attr("text-anchor", "middle")
         .attr("dy", "0.35em")
-        .attr("x", (d, i) => (rScale(maxRating) + 25) * Math.cos(angleSlice * i - Math.PI / 2))
-        .attr("y", (d, i) => (rScale(maxRating) + 25) * Math.sin(angleSlice * i - Math.PI / 2))
+        .attr("x", (d, i) => (rScale(maxRating) + 35) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y", (d, i) => (rScale(maxRating) + 35) * Math.sin(angleSlice * i - Math.PI / 2))
         .text(d => d.genre);
 
       // 准备雷达图数据

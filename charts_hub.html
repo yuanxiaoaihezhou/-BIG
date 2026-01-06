@@ -1314,7 +1314,7 @@
 
       const width = innerWidth - margin.left - margin.right;
       const height = innerHeight - margin.top - margin.bottom;
-      const radius = Math.min(width, height) / 2;
+      const radius = Math.min(width, height) / 2.5; // 缩小雷达图以避免标签覆盖
 
       const svg = container.append("svg")
         .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
@@ -1408,12 +1408,13 @@
       const MAX_GENRE_NAME_LENGTH = 10;
       axis.append("text")
         .attr("class", "legend")
-        .style("font-size", "9px")
+        .style("font-size", "8px")
         .style("fill", "#333")
+        .style("font-weight", "bold")
         .attr("text-anchor", "middle")
         .attr("dy", "0.35em")
-        .attr("x", (d, i) => (rScale(maxRating) + 15) * Math.cos(angleSlice * i - Math.PI / 2))
-        .attr("y", (d, i) => (rScale(maxRating) + 15) * Math.sin(angleSlice * i - Math.PI / 2))
+        .attr("x", (d, i) => (rScale(maxRating) + 25) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y", (d, i) => (rScale(maxRating) + 25) * Math.sin(angleSlice * i - Math.PI / 2))
         .text(d => d.genre.length > MAX_GENRE_NAME_LENGTH ? d.genre.substring(0, MAX_GENRE_NAME_LENGTH) + "..." : d.genre);
 
       // 准备雷达图数据
