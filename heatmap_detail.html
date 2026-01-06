@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>音乐流派流行度热力图 · 详情页</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      font-family:'Press Start 2P',monospace;
+      background:#000;
+      color:#fff;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:24px 16px 40px;
+      position:relative;
+      overflow-x:hidden;
+    }
+    .checkerboard{position:fixed;inset:0;z-index:0;overflow:hidden;}
+    .distortion{
+      position:absolute;inset:0;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size:40px 40px;opacity:.85;transform:scale(1.5);
+      animation:wave 8s ease-in-out infinite alternate;
+    }
+    @keyframes wave{
+      0%{transform:scale(1.5) rotate(0deg);}
+      100%{transform:scale(1.7) rotate(8deg);}
+    }
+    .page-inner{position:relative;z-index:1;width:100%;max-width:1200px;}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+    .header-title{font-size:18px;text-shadow:3px 3px 0 #ff4500;}
+    .header-right a{font-size:10px;color:#ADFF2F;text-decoration:none;}
+    .header-right a:hover{text-decoration:underline;}
+
+    .filter-bar{
+      margin-bottom:18px;padding:10px 16px;border-radius:16px;
+      background:rgba(0,0,0,.6);display:flex;flex-wrap:wrap;
+      gap:10px 16px;align-items:center;justify-content:flex-start;
+      font-size:10px;color:#ADFF2F;box-shadow:0 0 16px rgba(0,0,0,.6);
+    }
+    .filter-bar select{
+      font-family:inherit;font-size:10px;padding:5px 10px;
+      border-radius:10px;border:1px solid #444;background:#FFFAF0;
+      color:#000;box-shadow:0 0 8px rgba(0,0,0,.5);cursor:pointer;
+    }
+
+    .chart-card{
+      background:rgba(255,251,244,.96);
+      border-radius:28px;
+      box-shadow:0 16px 40px rgba(0,0,0,.4);
+      padding:16px 18px 18px;
+      color:#333;
+      display:flex;
+      flex-direction:column;
+    }
+    .chart-title{font-size:11px;margin-bottom:10px;color:#333;}
+    .chart-wrapper{flex:1;position:relative;aspect-ratio:16/9;}
+    .chart-wrapper svg{width:100%;height:100%;display:block;}
+
+    .tooltip{
+      position:absolute;background:rgba(255,255,255,.97);
+      border:1px solid #ccc;padding:6px 8px;font-size:12px;
+      pointer-events:none;border-radius:4px;box-shadow:0 0 6px rgba(0,0,0,.35);
+      color:#333;z-index:99;
+    }
+    .footer{margin-top:14px;text-align:center;font-size:9px;color:#ADFF2F;}
+
+    @media(max-width:900px){
+      .chart-wrapper{aspect-ratio:4/3;}
+    }
+  </style>
+</head>
+<body>
+  <div class="checkerboard"><div class="distortion"></div></div>
+  <div class="page-inner">
+    <header class="header">
+      <h1 class="header-title">GENRE HEATMAP · DETAIL VIEW</h1>
+      <div class="header-right">
+        <a href="charts_hub.html">← 返回总览</a>
+      </div>
+    </header>
+
+    <div class="filter-bar">
+      <span>年份范围：</span>
+      <select id="yearRange">
+        <option value="all">全部年份</option>
+        <option value="1950-1970">1950-1970</option>
+        <option value="1970-1990">1970-1990</option>
+        <option value="1990-2010">1990-2010</option>
+        <option value="2010-2030">2010-2025+</option>
+      </select>
+
+      <span>最小流派出现次数：</span>
+      <select id="minCount">
+        <option value="10">≥ 10 张专辑</option>
+        <option value="20" selected>≥ 20 张专辑</option>
+        <option value="30">≥ 30 张专辑</option>
+        <option value="50">≥ 50 张专辑</option>
+      </select>
+
+      <span>最多显示流派数：</span>
+      <select id="topK">
+        <option value="10">Top 10</option>
+        <option value="15" selected>Top 15</option>
+        <option value="20">Top 20</option>
+        <option value="25">Top 25</option>
+      </select>
+    </div>
+
+    <section class="chart-card">
+      <h2 class="chart-title">音乐流派流行度随时间变化热力图（可筛选）</h2>
+      <div class="chart-wrapper" id="heatmap-detail-chart"></div>
+    </section>
+
+    <div class="footer">
+      数据来源：RateYourMusic · 文件：rym_top_5000_all_time.csv
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    const CSV_FILE = "rym_top_5000_all_time.csv";
+    let allData = [];
+    const tooltip = d3.select("#tooltip");
+    const YEAR_BIN_SIZE = 5; // 5 年一桶
+
+    d3.csv(CSV_FILE).then(raw=>{
+      allData = raw.map(d=>{
+        const dateStr = String(d["Release Date"]||"").trim();
+        const m = dateStr.match(/(\d{4})/);
+        const year = m ? +m[1] : null;
+
+        const genresStr = d["Genres"] || "";
+        const genreList = genresStr
+          .split(",")
+          .map(s=>s.trim())
+          .filter(Boolean);
+
+        return { year, genreList };
+      }).filter(d=>d.year && d.year>=1950 && d.year<=2030);
+
+      initFilters();
+      render();
+    }).catch(err=>console.error(err));
+
+    function initFilters(){
+      d3.select("#yearRange").on("change",render);
+      d3.select("#minCount").on("change",render);
+      d3.select("#topK").on("change",render);
+    }
+
+    function getFiltered(){
+      let data = allData;
+      const yr = d3.select("#yearRange").property("value");
+      if (yr!=="all"){
+        const [s,e] = yr.split("-").map(Number);
+        data = data.filter(d=>d.year>=s && d.year<=e);
+      }
+      return data;
+    }
+
+    function render(){
+      const data = getFiltered();
+      const minCount = +d3.select("#minCount").property("value");
+      const topK = +d3.select("#topK").property("value");
+
+      const container = d3.select("#heatmap-detail-chart");
+      container.selectAll("*").remove();
+
+      if (!data.length){
+        container.append("p")
+          .style("font-size","11px")
+          .style("padding","8px")
+          .style("color","#333")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      data.forEach(d=>{
+        d.yearBin = Math.floor(d.year / YEAR_BIN_SIZE) * YEAR_BIN_SIZE;
+      });
+
+      const genreCounts = {};
+      data.forEach(d=>{
+        d.genreList.forEach(g=>{
+          genreCounts[g] = (genreCounts[g]||0)+1;
+        });
+      });
+
+      const topGenres = Object.entries(genreCounts)
+        .filter(([_,c])=>c>=minCount)
+        .sort((a,b)=>b[1]-a[1])
+        .slice(0,topK)
+        .map(([gName])=>gName);
+
+      const margin = {top:30,right:30,bottom:40,left:150};
+      const innerWidth = 1000;
+      const innerHeight = 600;
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("viewBox",`0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio","xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform",`translate(${margin.left},${margin.top})`);
+
+      if (!topGenres.length){
+        g.append("text")
+          .attr("x",width/2)
+          .attr("y",height/2)
+          .attr("text-anchor","middle")
+          .style("font-size","11px")
+          .text("当前阈值下流派出现次数太少");
+        return;
+      }
+
+      const genreYearCounts = {};
+      topGenres.forEach(gName=>genreYearCounts[gName]={});
+
+      data.forEach(d=>{
+        const yb = d.yearBin;
+        d.genreList.forEach(g=>{
+          if(topGenres.includes(g)){
+            if(!genreYearCounts[g][yb]) genreYearCounts[g][yb]=0;
+            genreYearCounts[g][yb]++;
+          }
+        });
+      });
+
+      const heatmapData = [];
+      topGenres.forEach(genre=>{
+        Object.keys(genreYearCounts[genre]).forEach(yb=>{
+          heatmapData.push({
+            genre,
+            yearBin:+yb,
+            count:genreYearCounts[genre][yb]
+          });
+        });
+      });
+
+      const maxCount = d3.max(heatmapData,d=>d.count);
+
+      const yearBins = Array.from(new Set(heatmapData.map(d=>d.yearBin)))
+        .sort((a,b)=>a-b);
+
+      const xScale = d3.scaleBand()
+        .domain(yearBins)
+        .range([0,width])
+        .padding(0.05);
+
+      const yScale = d3.scaleBand()
+        .domain(topGenres.slice().reverse())
+        .range([0,height])
+        .padding(0.05);
+
+      const colorScale = d3.scaleLinear()
+        .domain([0, maxCount*0.5, maxCount])
+        .range(["#fff7ec","#feb24c","#f03b20"]);
+
+      g.selectAll(".heat-cell")
+        .data(heatmapData)
+        .enter()
+        .append("rect")
+        .attr("class","heat-cell")
+        .attr("x",d=>xScale(d.yearBin))
+        .attr("y",d=>yScale(d.genre))
+        .attr("width",xScale.bandwidth())
+        .attr("height",yScale.bandwidth())
+        .attr("rx",3).attr("ry",3)
+        .attr("fill",d=>colorScale(d.count))
+        .attr("stroke","#fff")
+        .on("mouseover",(event,d)=>{
+          const totalInBin = data.filter(x=>x.yearBin===d.yearBin).length || 1;
+          const pct = (d.count/totalInBin)*100;
+          tooltip
+            .style("opacity",1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               年代：${d.yearBin}s<br/>
+               专辑数量：${d.count}<br/>
+               占该年代比例：${pct.toFixed(1)}%`
+            )
+            .style("left",(event.pageX+10)+"px")
+            .style("top",(event.pageY-10)+"px");
+        })
+        .on("mousemove",event=>{
+          tooltip
+            .style("left",(event.pageX+10)+"px")
+            .style("top",(event.pageY-10)+"px");
+        })
+        .on("mouseout",()=>tooltip.style("opacity",0));
+
+      g.append("g")
+        .attr("transform",`translate(0,${height})`)
+        .call(d3.axisBottom(xScale).tickFormat(d=>`${d}s`))
+        .selectAll("text")
+        .style("font-size","10px");
+
+      g.append("text")
+        .attr("x",width/2)
+        .attr("y",height+32)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("年代（"+YEAR_BIN_SIZE+" 年分组）");
+
+      g.append("g")
+        .call(d3.axisLeft(yScale))
+        .selectAll("text")
+        .style("font-size","10px");
+
+      g.append("text")
+        .attr("transform","rotate(-90)")
+        .attr("x",-height/2)
+        .attr("y",-120)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("音乐流派");
+
+      const legendWidth = 180;
+      const legendHeight = 10;
+
+      const defs = svg.append("defs");
+      const gradId = "legend-gradient-heat-detail";
+      const gradient = defs.append("linearGradient")
+        .attr("id",gradId)
+        .attr("x1","0%").attr("x2","100%")
+        .attr("y1","0%").attr("y2","0%");
+
+      [0,0.25,0.5,0.75,1].forEach(t=>{
+        gradient.append("stop")
+          .attr("offset",`${t*100}%`)
+          .attr("stop-color",colorScale(t*maxCount));
+      });
+
+      const legend = g.append("g")
+        .attr("transform",`translate(${width-legendWidth},-20)`);
+
+      legend.append("rect")
+        .attr("x",0).attr("y",0)
+        .attr("width",legendWidth).attr("height",legendHeight)
+        .attr("rx",4).attr("ry",4)
+        .style("fill",`url(#${gradId})`);
+
+      const legendScale = d3.scaleLinear()
+        .domain([0,maxCount])
+        .range([0,legendWidth]);
+
+      const legendAxis = d3.axisBottom(legendScale)
+        .ticks(4)
+        .tickFormat(d3.format("d"));
+
+      legend.append("g")
+        .attr("transform",`translate(0,${legendHeight})`)
+        .call(legendAxis)
+        .selectAll("text")
+        .style("font-size","9px");
+    }
+  </script>
+</body>
+</html>

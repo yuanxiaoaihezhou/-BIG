@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音乐流派年代环形图</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        #chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 20px 0;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        .error {
+            text-align: center;
+            color: #e74c3c;
+            padding: 20px;
+            font-weight: bold;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            gap: 15px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button.active {
+            background: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RYM Top 5000 音乐流派年代分布</h1>
+        <p class="subtitle">扇形高度表示该流派在对应年代的平均评分</p>
+        
+        <div class="controls">
+            <button id="radial-btn" class="active">环形图</button>
+            <button id="bar-btn">条形图</button>
+        </div>
+        
+        <div id="chart-container">
+            <div class="loading">正在加载数据，请稍候...</div>
+        </div>
+        
+        <div class="legend" id="legend"></div>
+    </div>
+
+    <script>
+        // 加载CSV数据并创建可视化
+        async function loadDataAndCreateChart() {
+            try {
+                // 读取CSV数据
+                const response = await fetch('rym_top_5000_all_time.csv');
+                if (!response.ok) {
+                    throw new Error('无法加载CSV文件。请确保文件在正确位置。');
+                }
+                
+                const csvText = await response.text();
+                const data = parseCSV(csvText);
+                
+                if (data.length === 0) {
+                    throw new Error('没有解析到有效数据');
+                }
+                
+                // 处理数据
+                const processedData = processMusicData(data);
+                
+                // 创建环形图
+                createChart(processedData);
+                
+            } catch (error) {
+                document.getElementById('chart-container').innerHTML = 
+                    `<div class="error">错误: ${error.message}</div>`;
+                console.error('数据处理错误:', error);
+            }
+        }
+        
+        // 简单CSV解析函数
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                // 处理带引号的字段
+                const fields = [];
+                let currentField = '';
+                let inQuotes = false;
+                let charIndex = 0;
+                
+                while (charIndex < line.length) {
+                    const char = line[charIndex];
+                    
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                        charIndex++;
+                        continue;
+                    }
+                    
+                    if (char === ',' && !inQuotes) {
+                        fields.push(currentField.trim());
+                        currentField = '';
+                        charIndex++;
+                        continue;
+                    }
+                    
+                    currentField += char;
+                    charIndex++;
+                }
+                
+                fields.push(currentField.trim());
+                
+                if (fields.length >= 5) {
+                    data.push({
+                        rank: fields[0].replace(/\D/g, ''),
+                        title: fields[1] || '',
+                        artist: fields[2] || '',
+                        date: fields[3] || '',
+                        genres: fields[4] || '',
+                        description: fields[5] || '',
+                        rating: parseFloat(fields[6]) || 0,
+                        num_reviews: parseInt(fields[7].replace(/,/g, '')) || 0
+                    });
+                }
+            }
+            
+            return data;
+        }
+        
+        // 处理音乐数据
+        function processMusicData(data) {
+            // 提取所有流派，处理多重流派（用逗号分隔的）
+            const allGenres = [];
+            const decades = {};
+            
+            // 创建年代区间
+            for (let year = 1950; year <= 2020; year += 10) {
+                decades[`${year}s`] = {};
+            }
+            
+            // 处理每张专辑
+            data.forEach(album => {
+                // 解析年份
+                let year = 0;
+                if (album.date) {
+                    // 尝试从不同格式提取年份
+                    const yearMatch = album.date.match(/\d{4}/);
+                    if (yearMatch) {
+                        year = parseInt(yearMatch[0], 10);
+                    }
+                }
+                
+                // 确定年代
+                let decade = null;
+                if (year >= 1950 && year <= 2029) {
+                    const decadeStart = Math.floor(year / 10) * 10;
+                    decade = `${decadeStart}s`;
+                }
+                
+                // 处理流派
+                let genres = [];
+                if (album.genres) {
+                    // 拆分多重流派
+                    genres = album.genres.split(/,\s*/)
+                        .map(g => g.replace(/^"|"$/g, '').trim())
+                        .filter(g => g && g !== '');
+                }
+                
+                if (genres.length === 0) genres = ['Unknown'];
+                
+                // 为每个流派准备数据
+                genres.forEach(genre => {
+                    if (decade) {
+                        if (!decades[decade][genre]) {
+                            decades[decade][genre] = {
+                                totalRating: 0,
+                                count: 0,
+                                albums: []
+                            };
+                        }
+                        
+                        decades[decade][genre].totalRating += album.rating;
+                        decades[decade][genre].count += 1;
+                        decades[decade][genre].albums.push({
+                            title: album.title,
+                            artist: album.artist,
+                            rating: album.rating
+                        });
+                        
+                        allGenres.push(genre);
+                    }
+                });
+            });
+            
+            // 统计流派频率
+            const genreCounts = {};
+            allGenres.forEach(genre => {
+                genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+            });
+            
+            // 获取前15个最常见流派
+            const topGenres = Object.entries(genreCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15)
+                .map(entry => entry[0]);
+            
+            // 计算每个流派在每个年代的平均评分
+            const result = [];
+            Object.entries(decades).forEach(([decade, genresData]) => {
+                topGenres.forEach(genre => {
+                    if (genresData[genre] && genresData[genre].count >= 3) { // 只考虑至少有3张专辑的流派
+                        const avgRating = genresData[genre].totalRating / genresData[genre].count;
+                        result.push({
+                            decade,
+                            genre,
+                            avgRating: avgRating,
+                            count: genresData[genre].count,
+                            albums: genresData[genre].albums
+                        });
+                    }
+                });
+            });
+            
+            return {
+                data: result,
+                topGenres: topGenres,
+                decades: Object.keys(decades).filter(d => 
+                    result.some(item => item.decade === d)
+                )
+            };
+        }
+        
+        // 创建环形图
+        function createChart(processedData) {
+            const container = document.getElementById('chart-container');
+            container.innerHTML = '';
+            
+            // 设置尺寸
+            const width = 900;
+            const height = 700;
+            const radius = Math.min(width, height) / 2.5;
+            const innerRadius = 30;
+            const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+            
+            // 创建SVG
+            const svg = d3.select('#chart-container')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${width / 2 + margin.left}, ${height / 2 + margin.top})`);
+            
+            // 创建颜色比例尺
+            const color = d3.scaleOrdinal()
+                .domain(processedData.topGenres)
+                .range(d3.schemeCategory10.concat(d3.schemePaired.slice(0, 5)));
+            
+            // 创建径向比例尺 - 用于确定每个年代环的位置
+            const decadeRadius = d3.scaleBand()
+                .domain(processedData.decades)
+                .range([innerRadius, radius]);
+            
+            // 创建角度比例尺 - 每个流派占360度
+            const angle = d3.scaleBand()
+                .domain(processedData.topGenres)
+                .range([0, 2 * Math.PI])
+                .align(0);
+            
+            // 创建径向比例尺 - 用于确定评分高度
+            const radialScale = d3.scaleLinear()
+                .domain([3.0, 4.5]) // 评分范围
+                .range([0, decadeRadius.bandwidth() * 0.9]); // 高度范围
+            
+            // 添加标题
+            svg.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '-2.5em')
+                .attr('font-size', '20px')
+                .attr('font-weight', 'bold')
+                .text('Top 15 音乐流派年代分布 (1950s-2020s)');
+            
+            // 添加子标题
+            svg.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '-0.8em')
+                .attr('font-size', '14px')
+                .attr('fill', '#7f8c8d')
+                .text('扇形高度表示该流派在对应年代的平均评分');
+            
+            // 创建提示框
+            const tooltip = d3.select('body')
+                .append('div')
+                .attr('class', 'tooltip')
+                .style('opacity', 0);
+            
+            // 为每个年代创建环
+            processedData.decades.forEach(decade => {
+                const decadeData = processedData.data.filter(d => d.decade === decade);
+                
+                // 为每个流派创建扇形
+                decadeData.forEach(d => {
+                    const arc = d3.arc()
+                        .innerRadius(decadeRadius(decade))
+                        .outerRadius(decadeRadius(decade) + radialScale(d.avgRating - 3.0))
+                        .startAngle(angle(d.genre))
+                        .endAngle(angle(d.genre) + angle.bandwidth());
+                    
+                    svg.append('path')
+                        .attr('d', arc)
+                        .attr('fill', color(d.genre))
+                        .attr('stroke', '#fff')
+                        .attr('stroke-width', 0.5)
+                        .on('mouseover', function(event) {
+                            tooltip.transition().duration(200).style('opacity', .9);
+                            tooltip.html(`<strong>${d.genre}</strong><br/>年代: ${decade}<br/>平均评分: ${d.avgRating.toFixed(2)}<br/>专辑数量: ${d.count}`)
+                                .style('left', (event.pageX + 10) + 'px')
+                                .style('top', (event.pageY - 28) + 'px');
+                        })
+                        .on('mouseout', function() {
+                            tooltip.transition().duration(500).style('opacity', 0);
+                        });
+                });
+            });
+            
+            // 添加年代标签
+            processedData.decades.forEach(decade => {
+                const midRadius = decadeRadius(decade) + decadeRadius.bandwidth() / 2;
+                svg.append('text')
+                    .attr('transform', `rotate(${(90 + 180 / Math.PI * (Math.PI / 2))}) translate(${midRadius},0) rotate(${-(90 + 180 / Math.PI * (Math.PI / 2))})`)
+                    .attr('text-anchor', 'middle')
+                    .attr('alignment-baseline', 'middle')
+                    .attr('font-size', '12px')
+                    .attr('fill', '#555')
+                    .text(decade);
+            });
+            
+            // 添加中心圆圈
+            svg.append('circle')
+                .attr('r', innerRadius - 5)
+                .attr('fill', '#f8f9fa')
+                .attr('stroke', '#ddd');
+            
+            // 创建图例
+            const legendContainer = d3.select('#legend');
+            legendContainer.html('');
+            
+            const legendItems = legendContainer.selectAll('.legend-item')
+                .data(processedData.topGenres)
+                .enter()
+                .append('div')
+                .attr('class', 'legend-item');
+            
+            legendItems.append('div')
+                .attr('class', 'legend-color')
+                .style('background-color', d => color(d));
+            
+            legendItems.append('span')
+                .text(d => d);
+            
+            // 切换视图按钮
+            document.getElementById('radial-btn').addEventListener('click', function() {
+                document.getElementById('radial-btn').classList.add('active');
+                document.getElementById('bar-btn').classList.remove('active');
+                container.innerHTML = '';
+                createChart(processedData);
+            });
+            
+            document.getElementById('bar-btn').addEventListener('click', function() {
+                document.getElementById('bar-btn').classList.add('active');
+                document.getElementById('radial-btn').classList.remove('active');
+                container.innerHTML = '';
+                createBarChart(processedData);
+            });
+        }
+        
+        // 创建替代的条形图
+        function createBarChart(processedData) {
+            const container = document.getElementById('chart-container');
+            
+            // 设置尺寸
+            const width = 900;
+            const height = 600;
+            const margin = { top: 40, right: 30, bottom: 80, left: 150 };
+            
+            // 创建SVG
+            const svg = d3.select('#chart-container')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', `translate(${margin.left}, ${margin.top})`);
+            
+            // 创建颜色比例尺
+            const color = d3.scaleOrdinal()
+                .domain(processedData.topGenres)
+                .range(d3.schemeCategory10.concat(d3.schemePaired.slice(0, 5)));
+            
+            // 准备数据 - 按年代和流派分组
+            const nestedData = d3.rollup(
+                processedData.data,
+                v => d3.mean(v, d => d.avgRating),
+                d => d.decade,
+                d => d.genre
+            );
+            
+            // 获取唯一的年代
+            const decades = processedData.decades;
+            
+            // X轴比例尺
+            const x = d3.scaleBand()
+                .domain(decades)
+                .range([0, width])
+                .padding(0.3);
+            
+            // Y轴比例尺
+            const y = d3.scaleLinear()
+                .domain([3.0, 4.5])
+                .range([height, 0]);
+            
+            // 创建X轴
+            svg.append('g')
+                .attr('transform', `translate(0, ${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll('text')
+                .style('text-anchor', 'end')
+                .attr('dx', '-.8em')
+                .attr('dy', '.15em')
+                .attr('transform', 'rotate(-45)');
+            
+            // 创建Y轴
+            svg.append('g')
+                .call(d3.axisLeft(y).ticks(8));
+            
+            // 添加标题
+            svg.append('text')
+                .attr('x', width / 2)
+                .attr('y', -20)
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '20px')
+                .attr('font-weight', 'bold')
+                .text('Top 15 音乐流派年代分布 (1950s-2020s)');
+            
+            // 添加Y轴标签
+            svg.append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', 0 - margin.left + 20)
+                .attr('x', 0 - (height / 2))
+                .attr('dy', '1em')
+                .attr('text-anchor', 'middle')
+                .text('平均评分');
+            
+            // 为每个年代创建柱状图组
+            const barGroups = svg.selectAll('.decade')
+                .data(decades)
+                .enter()
+                .append('g')
+                .attr('class', 'decade')
+                .attr('transform', d => `translate(${x(d)}, 0)`);
+            
+            // 为每个流派创建柱状
+            const genreWidth = x.bandwidth() / processedData.topGenres.length;
+            
+            barGroups.each(function(decade) {
+                const group = d3.select(this);
+                
+                processedData.topGenres.forEach((genre, i) => {
+                    const rating = nestedData.get(decade)?.get(genre) || 0;
+                    if (rating > 0) {
+                        group.append('rect')
+                            .attr('x', i * genreWidth)
+                            .attr('y', y(rating))
+                            .attr('width', genreWidth - 2)
+                            .attr('height', height - y(rating))
+                            .attr('fill', color(genre))
+                            .attr('stroke', '#fff')
+                            .attr('stroke-width', 0.5);
+                    }
+                });
+            });
+            
+            // 创建图例
+            const legendContainer = d3.select('#legend');
+            legendContainer.html('');
+            
+            const legendItems = legendContainer.selectAll('.legend-item')
+                .data(processedData.topGenres)
+                .enter()
+                .append('div')
+                .attr('class', 'legend-item');
+            
+            legendItems.append('div')
+                .attr('class', 'legend-color')
+                .style('background-color', d => color(d));
+            
+            legendItems.append('span')
+                .text(d => d);
+        }
+        
+        // 页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', loadDataAndCreateChart);
+    </script>
+</body>
+</html>

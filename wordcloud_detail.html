@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RYM Top 5000 · 描述词云分析</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background: #000;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 24px 16px 40px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        .checkerboard {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .distortion {
+            position: absolute;
+            inset: 0;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+            background-size: 40px 40px;
+            opacity: .85;
+            transform: scale(1.5);
+            animation: wave 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes wave {
+            0% { transform: scale(1.5) rotate(0deg); }
+            100% { transform: scale(1.7) rotate(8deg); }
+        }
+
+        .page-inner {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .header-title {
+            font-size: 16px;
+            text-shadow: 3px 3px 0 #ff4500;
+        }
+
+        .header-right a {
+            font-size: 9px;
+            color: #ADFF2F;
+            text-decoration: none;
+        }
+
+        .header-right a:hover {
+            text-decoration: underline;
+        }
+
+        .controls {
+            margin-bottom: 18px;
+            padding: 10px 16px;
+            border-radius: 16px;
+            background: rgba(0,0,0,.6);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 10px;
+            color: #ADFF2F;
+            box-shadow: 0 0 16px rgba(0,0,0,.6);
+        }
+
+        .decade-selector {
+            font-family: inherit;
+            font-size: 10px;
+            padding: 5px 10px;
+            border-radius: 10px;
+            border: 1px solid #444;
+            background: #FFFAF0;
+            color: #000;
+            box-shadow: 0 0 8px rgba(0,0,0,.5);
+            cursor: pointer;
+        }
+
+        .wordcloud-card {
+            background: rgba(255,251,244,.96);
+            border-radius: 28px;
+            box-shadow: 0 16px 40px rgba(0,0,0,.4);
+            padding: 16px;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 11px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .wordcloud-container {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #wordcloud {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(255,255,255,.97);
+            border: 1px solid #ccc;
+            padding: 6px 8px;
+            font-size: 12px;
+            pointer-events: none;
+            border-radius: 4px;
+            box-shadow: 0 0 6px rgba(0,0,0,.35);
+            color: #333;
+            z-index: 99;
+            opacity: 0;
+        }
+
+        .footer {
+            margin-top: 14px;
+            text-align: center;
+            font-size: 9px;
+            color: #ADFF2F;
+        }
+
+        @media (max-width: 900px) {
+            .wordcloud-container {
+                aspect-ratio: 4/3;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="checkerboard"><div class="distortion"></div></div>
+    <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+    <div class="page-inner">
+        <header>
+            <h1 class="header-title">DESCRIPTION WORD CLOUD · DETAIL VIEW</h1>
+            <div class="header-right">
+                <a href="charts_hub.html">← 返回总览</a>
+            </div>
+        </header>
+
+        <div class="controls">
+            <span>筛选年代：</span>
+            <select id="decade-select" class="decade-selector">
+                <option value="all" selected>所有年代</option>
+                <option value="1950">1950年代</option>
+                <option value="1960">1960年代</option>
+                <option value="1970">1970年代</option>
+                <option value="1980">1980年代</option>
+                <option value="1990">1990年代</option>
+                <option value="2000">2000年代</option>
+                <option value="2010">2010年代</option>
+                <option value="2020">2020年代</option>
+            </select>
+        </div>
+
+        <section class="wordcloud-card">
+            <h2 class="chart-title">专辑描述高频词（按年代筛选）</h2>
+            <div class="wordcloud-container">
+                <svg id="wordcloud"></svg>
+            </div>
+        </section>
+        <div class="footer">
+            数据来源：RateYourMusic · 文件：decade_word_data.json
+        </div>
+    </div>
+
+    <script>
+        let currentDecade = "all";
+        let wordData = {};
+        let resizeTimeout = null;
+        // 提前获取tooltip引用，和原代码保持一致
+        const tooltip = d3.select("#tooltip");
+
+        const colorScale = d3.scaleOrdinal()
+            .range(d3.schemeCategory10);
+
+        document.addEventListener("DOMContentLoaded", function () {
+            d3.json("decade_word_data.json")
+                .then(rawData => {
+                    wordData = cleanWordData(rawData);
+                    updateWordCloud(currentDecade);
+                    bindControlEvents();
+
+                    window.addEventListener("resize", () => {
+                        clearTimeout(resizeTimeout);
+                        resizeTimeout = setTimeout(() => {
+                            updateWordCloud(currentDecade);
+                        }, 300);
+                    });
+                })
+                .catch(error => {
+                    console.error("❌ 词频数据加载失败:", error);
+                    showNoDataMessage("Failed to load data.");
+                });
+        });
+
+        function cleanWordData(rawData) {
+            const cleanedData = {};
+            Object.keys(rawData).forEach(decade => {
+                const words = rawData[decade];
+                const filteredWords = words.filter(word => {
+                    const text = word.text.trim().toLowerCase();
+                    return (
+                        !text.includes("...") &&
+                        text.length > 2 &&
+                        text.length < 20 &&
+                        /^[a-zA-Z\s'-]+$/.test(text)
+                    );
+                });
+                cleanedData[decade] = filteredWords;
+            });
+            return cleanedData;
+        }
+
+        function bindControlEvents() {
+            d3.select("#decade-select").on("change", function () {
+                currentDecade = this.value;
+                updateWordCloud(currentDecade);
+            });
+        }
+
+        function updateWordCloud(decade) {
+            const wordsRaw = wordData[decade] || wordData["all"];
+            const container = d3.select(".wordcloud-container");
+            const svg = d3.select("#wordcloud");
+
+            svg.selectAll("*").remove();
+
+            if (!wordsRaw || wordsRaw.length === 0) {
+                showNoDataMessage("当前筛选条件下无数据");
+                return;
+            }
+
+            const containerWidth = container.node().clientWidth;
+            const containerHeight = container.node().clientHeight;
+
+            svg.attr("width", containerWidth).attr("height", containerHeight);
+
+            const words = wordsRaw.map(d => ({
+                text: d.text,
+                value: +d.value
+            }));
+
+            const maxValue = d3.max(words, d => d.value);
+
+            const cloudLayout = d3.layout.cloud()
+                .size([containerWidth, containerHeight])
+                .words(words)
+                .padding(5)
+                .rotate(() => 0)
+                .font("Impact")
+                .fontSize(d => {
+                    const baseScale = Math.sqrt(maxValue) * 3.5;
+                    return (Math.sqrt(d.value) / Math.sqrt(maxValue)) * baseScale;
+                })
+                .on("end", drawCloud);
+
+            cloudLayout.start();
+        }
+
+        function drawCloud(words) {
+            const svg = d3.select("#wordcloud");
+            const container = d3.select(".wordcloud-container");
+
+            const centerX = container.node().clientWidth / 2;
+            const centerY = container.node().clientHeight / 2;
+
+            const cloudGroup = svg.append("g")
+                .attr("transform", `translate(${centerX}, ${centerY})`);
+
+            const wordElements = cloudGroup.selectAll("text")
+                .data(words)
+                .enter()
+                .append("text")
+                .attr("class", "word")
+                .style("font-size", d => `${d.size}px`)
+                .style("font-family", "Impact")
+                .style("fill", (d, i) => colorScale(i))
+                .attr("text-anchor", "middle")
+                .attr("transform", d => `translate(${d.x}, ${d.y}) rotate(${d.rotate})`)
+                .text(d => d.text)
+                .style("opacity", 0);
+
+            wordElements.transition()
+                .duration(600)
+                .delay((d, i) => i * 5)
+                .style("opacity", 1);
+
+            // 完全对齐原散点图的悬停逻辑
+            wordElements
+                .on("mouseover", (event, d) => {
+                    // 显示提示框，设置透明度为1
+                    tooltip
+                        .style("opacity", 1)
+                        // 提示框内容格式和原代码保持一致
+                        .html(
+                            `<strong>${d.text}</strong><br/>
+                             出现次数：${d.value.toLocaleString()}`
+                        )
+                        // 位置偏移和原代码一致（右+10，下+10），避免遮挡鼠标
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY + 10) + "px");
+                    
+                    // 鼠标悬浮时的文字高亮效果
+                    d3.select(event.currentTarget)
+                        .style("stroke", "#333")
+                        .style("stroke-width", 1);
+                })
+                .on("mousemove", (event) => {
+                    // 鼠标移动时实时跟随，和原代码逻辑一致
+                    tooltip
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mouseout", () => {
+                    // 隐藏提示框
+                    tooltip.style("opacity", 0);
+                    
+                    // 移除高亮效果
+                    d3.select(event.currentTarget)
+                        .style("stroke", "none");
+                });
+        }
+
+        function showNoDataMessage(message) {
+            const svg = d3.select("#wordcloud");
+            const container = d3.select(".wordcloud-container");
+            const w = container.node().clientWidth;
+            const h = container.node().clientHeight;
+
+            svg.append("text")
+                .attr("x", w / 2)
+                .attr("y", h / 2)
+                .attr("text-anchor", "middle")
+                .style("font-size", "11px")
+                .style("fill", "#333")
+                .text(message);
+        }
+    </script>
+</body>
+</html>

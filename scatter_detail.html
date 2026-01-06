@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>评分 vs 评分人数 · 详情页</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      font-family:'Press Start 2P',monospace;
+      background:#000;
+      color:#fff;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:24px 16px 40px;
+      position:relative;
+      overflow-x:hidden;
+    }
+    .checkerboard{position:fixed;inset:0;z-index:0;overflow:hidden;}
+    .distortion{
+      position:absolute;inset:0;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size:40px 40px;opacity:.85;transform:scale(1.5);
+      animation:wave 8s ease-in-out infinite alternate;
+    }
+    @keyframes wave{
+      0%{transform:scale(1.5) rotate(0deg);}
+      100%{transform:scale(1.7) rotate(8deg);}
+    }
+    .page-inner{position:relative;z-index:1;width:100%;max-width:1200px;}
+    .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+    .header-title{font-size:18px;text-shadow:3px 3px 0 #ff4500;}
+    .header-right a{font-size:10px;color:#ADFF2F;text-decoration:none;}
+    .header-right a:hover{text-decoration:underline;}
+
+    .filter-bar{
+      margin-bottom:18px;padding:10px 16px;border-radius:16px;
+      background:rgba(0,0,0,.6);display:flex;flex-wrap:wrap;
+      gap:10px 16px;align-items:center;justify-content:flex-start;
+      font-size:10px;color:#ADFF2F;box-shadow:0 0 16px rgba(0,0,0,.6);
+    }
+    .filter-bar select{
+      font-family:inherit;font-size:10px;padding:5px 10px;
+      border-radius:10px;border:1px solid #444;background:#FFFAF0;
+      color:#000;box-shadow:0 0 8px rgba(0,0,0,.5);cursor:pointer;
+    }
+
+    .chart-card{
+      background:rgba(255,251,244,.96);
+      border-radius:28px;
+      box-shadow:0 16px 40px rgba(0,0,0,.4);
+      padding:16px 18px 18px;
+      color:#333;
+      display:flex;
+      flex-direction:column;
+    }
+    .chart-title{font-size:11px;margin-bottom:10px;color:#333;}
+    .chart-wrapper{flex:1;position:relative;aspect-ratio:16/9;}
+    .chart-wrapper svg{width:100%;height:100%;display:block;}
+
+    .tooltip{
+      position:absolute;background:rgba(255,255,255,.97);
+      border:1px solid #ccc;padding:6px 8px;font-size:12px;
+      pointer-events:none;border-radius:4px;box-shadow:0 0 6px rgba(0,0,0,.35);
+      color:#333;z-index:99;
+    }
+    .footer{margin-top:14px;text-align:center;font-size:9px;color:#ADFF2F;}
+
+    @media(max-width:900px){
+      .chart-wrapper{aspect-ratio:4/3;}
+    }
+  </style>
+</head>
+<body>
+  <div class="checkerboard"><div class="distortion"></div></div>
+  <div class="page-inner">
+    <header class="header">
+      <h1 class="header-title">RATING vs POPULARITY · DETAIL VIEW</h1>
+      <div class="header-right">
+        <a href="charts_hub.html">← 返回总览</a>
+      </div>
+    </header>
+
+    <div class="filter-bar">
+      <span>年份范围：</span>
+      <select id="yearRange">
+        <option value="all">全部年份</option>
+        <option value="1950-1970">1950-1970</option>
+        <option value="1970-1990">1970-1990</option>
+        <option value="1990-2010">1990-2010</option>
+        <option value="2010-2030">2010-2025+</option>
+      </select>
+
+      <span>最低评分：</span>
+      <select id="minRating">
+        <option value="0">不限</option>
+        <option value="3.7">≥ 3.7</option>
+        <option value="4.0">≥ 4.0</option>
+      </select>
+
+      <span>最低评分人数：</span>
+      <select id="minNumRatings">
+        <option value="0">不限</option>
+        <option value="1000">≥ 1,000</option>
+        <option value="5000">≥ 5,000</option>
+        <option value="10000">≥ 10,000</option>
+      </select>
+    </div>
+
+    <section class="chart-card">
+      <h2 class="chart-title">评分 vs 评分人数（按年代着色，可筛选）</h2>
+      <div class="chart-wrapper" id="scatter-detail-chart"></div>
+    </section>
+
+    <div class="footer">
+      数据来源：RateYourMusic · 文件：rym_top_5000_all_time.csv
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    const CSV_FILE = "rym_top_5000_all_time.csv";
+    let allData = [];
+    let colorScale = null; // 全局颜色比例尺
+    const tooltip = d3.select("#tooltip");
+
+    // 固定的颜色调色板
+    const palette = [
+      "#1f77b4","#ff7f0e","#2ca02c","#d62728",
+      "#9467bd","#8c564b","#e377c2","#7f7f7f",
+      "#bcbd22","#17becf","#aec7e8","#ffbb78"
+    ];
+
+    d3.csv(CSV_FILE).then(raw=>{
+      allData = raw.map(d=>{
+        const rating = +d["Average Rating"];
+        let numRatings = d["Number of Ratings"];
+        if (numRatings!=null){
+          numRatings = +String(numRatings).replace(/,/g,"").trim();
+        }
+        const dateStr = String(d["Release Date"]||"").trim();
+        const m = dateStr.match(/(\d{4})/);
+        const year = m ? +m[1] : null;
+
+        let decade = "Unknown";
+        if (year && year>0){
+          const dec = Math.floor(year/10)*10;
+          decade = dec + "s";
+        }
+
+        return {
+          album:d["Album"],
+          artist:d["Artist Name"],
+          rating,
+          numRatings,
+          year,
+          decade
+        };
+      }).filter(d=>d.year && !isNaN(d.rating) && !isNaN(d.numRatings) && d.numRatings>0 
+        && d.decade !== "1940s"); // 过滤掉1940年代的数据
+
+      // 获取所有可能的年代并排序，创建全局固定的颜色比例尺
+      const allDecades = Array.from(new Set(allData.map(d=>d.decade)))
+        .sort((a,b)=>{
+          if(a==="Unknown") return 1;
+          if(b==="Unknown") return -1;
+          return parseInt(a)-parseInt(b);
+        });
+      
+      // 创建全局颜色比例尺，确保每个年代的颜色固定
+      colorScale = d3.scaleOrdinal()
+        .domain(allDecades)
+        .range(palette);
+
+      initFilters();
+      render();
+    }).catch(err=>console.error(err));
+
+    function initFilters(){
+      d3.select("#yearRange").on("change",render);
+      d3.select("#minRating").on("change",render);
+      d3.select("#minNumRatings").on("change",render);
+    }
+
+    function getFiltered(){
+      let data = allData;
+      const yr = d3.select("#yearRange").property("value");
+      if (yr!=="all"){
+        const [s,e] = yr.split("-").map(Number);
+        data = data.filter(d=>d.year>=s && d.year<=e);
+      }
+      const minR = +d3.select("#minRating").property("value");
+      if (minR>0){
+        data = data.filter(d=>d.rating>=minR);
+      }
+      const minN = +d3.select("#minNumRatings").property("value");
+      if (minN>0){
+        data = data.filter(d=>d.numRatings>=minN);
+      }
+      return data;
+    }
+
+    function render(){
+      const data = getFiltered();
+      const container = d3.select("#scatter-detail-chart");
+      container.selectAll("*").remove();
+
+      if (!data.length){
+        container.append("p")
+          .style("font-size","11px")
+          .style("padding","8px")
+          .style("color","#333")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      const margin = {top:30,right:20,bottom:50,left:70};
+      const innerWidth = 1000;
+      const innerHeight = 600;
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("viewBox",`0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio","xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform",`translate(${margin.left},${margin.top})`);
+
+      const ratingExtent = d3.extent(data,d=>d.rating);
+      const pad = .05;
+      const x = d3.scaleLinear()
+        .domain([ratingExtent[0]-pad, ratingExtent[1]+pad]).nice()
+        .range([0,width]);
+
+      const minNum = d3.min(data,d=>d.numRatings);
+      const maxNum = d3.max(data,d=>d.numRatings);
+      const y = d3.scaleLog()
+        .domain([Math.max(1,minNum), maxNum]).nice()
+        .range([height,0]);
+
+      const xAxis = d3.axisBottom(x);
+      const yAxis = d3.axisLeft(y).ticks(10,"~s");
+
+      g.append("g")
+        .attr("transform",`translate(0,${height})`)
+        .call(xAxis);
+
+      g.append("g").call(yAxis);
+
+      g.append("text")
+        .attr("x",width/2)
+        .attr("y",height+40)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("平均评分");
+
+      g.append("text")
+        .attr("transform","rotate(-90)")
+        .attr("x",-height/2)
+        .attr("y",-50)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("评分人数（对数刻度）");
+
+      // 获取当前筛选数据中的年代（用于图例显示）
+      const currentDecades = Array.from(new Set(data.map(d=>d.decade)))
+        .sort((a,b)=>{
+          if(a==="Unknown") return 1;
+          if(b==="Unknown") return -1;
+          return parseInt(a)-parseInt(b);
+        });
+
+      // 使用全局固定的颜色比例尺
+      g.selectAll(".dot")
+        .data(data)
+        .enter()
+        .append("circle")
+        .attr("class","dot")
+        .attr("cx",d=>x(d.rating))
+        .attr("cy",d=>y(d.numRatings))
+        .attr("r",2.5)
+        .attr("fill",d=>colorScale(d.decade)) // 使用全局颜色比例尺
+        .attr("fill-opacity",0.7)
+        .on("mouseover",(event,d)=>{
+          tooltip
+            .style("opacity",1)
+            .html(
+              `<strong>${d.album}</strong><br/>
+               ${d.artist}${d.year?" ("+d.year+")":""}<br/>
+               评分：${d.rating.toFixed(2)}<br/>
+               评分人数：${d.numRatings.toLocaleString()}`
+            )
+            .style("left",(event.pageX+10)+"px")
+            .style("top",(event.pageY+10)+"px");
+        })
+        .on("mousemove",event=>{
+          tooltip
+            .style("left",(event.pageX+10)+"px")
+            .style("top",(event.pageY+10)+"px");
+        })
+        .on("mouseout",()=>tooltip.style("opacity",0));
+
+      // 区域阈值
+      const ratingsSorted = data.map(d=>d.rating).sort((a,b)=>a-b);
+      const numsSorted = data.map(d=>d.numRatings).sort((a,b)=>a-b);
+      const ratingThreshold = d3.quantile(ratingsSorted,0.7);
+      const numRatingsThreshold = d3.quantile(numsSorted,0.7);
+
+      g.append("line")
+        .attr("x1",x(ratingThreshold))
+        .attr("x2",x(ratingThreshold))
+        .attr("y1",0)
+        .attr("y2",height)
+        .attr("stroke","#999")
+        .attr("stroke-dasharray","4 4");
+
+      g.append("line")
+        .attr("x1",0)
+        .attr("x2",width)
+        .attr("y1",y(numRatingsThreshold))
+        .attr("y2",y(numRatingsThreshold))
+        .attr("stroke","#999")
+        .attr("stroke-dasharray","4 4");
+
+      const padEdge = 10;
+      function styleRegionLabel(sel){
+        sel.style("font-size","13px")
+           .style("font-weight","bold")
+           .style("fill","#444");
+      }
+
+      styleRegionLabel(
+        g.append("text")
+          .attr("x",padEdge)
+          .attr("y",padEdge+12)
+          .attr("text-anchor","start")
+          .text("爆火但评分一般")
+      );
+
+      styleRegionLabel(
+        g.append("text")
+          .attr("x",width-padEdge)
+          .attr("y",padEdge+12)
+          .attr("text-anchor","end")
+          .text("高分爆款")
+      );
+
+      styleRegionLabel(
+        g.append("text")
+          .attr("x",padEdge)
+          .attr("y",height-padEdge)
+          .attr("text-anchor","start")
+          .text("小众且评分一般")
+      );
+
+      styleRegionLabel(
+        g.append("text")
+          .attr("x",width-padEdge)
+          .attr("y",height-padEdge)
+          .attr("text-anchor","end")
+          .text("高分冷门")
+      );
+
+      // 调整图例位置，向下移动300px，避免遮挡图表
+      const legend = g.append("g")
+        .attr("transform",`translate(${width-150},300)`);
+
+      const legendItem = legend.selectAll(".legend-item")
+        .data(currentDecades) // 只显示当前筛选数据中的年代
+        .enter()
+        .append("g")
+        .attr("class","legend-item")
+        .attr("transform",(d,i)=>`translate(0,${i*16})`);
+
+      legendItem.append("rect")
+        .attr("x",0).attr("y",2)
+        .attr("width",10).attr("height",10)
+        .attr("fill",d=>colorScale(d)); // 使用全局颜色比例尺
+
+      legendItem.append("text")
+        .attr("x",16).attr("y",11)
+        .style("font-size","9px")
+        .text(d=>d);
+    }
+  </script>
+</body>
+</html>

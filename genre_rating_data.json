@@ -1,0 +1,398 @@
+[
+  {
+    "decade": "1940s",
+    "genres": []
+  },
+  {
+    "decade": "1950s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.74
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.87
+      },
+      {
+        "genre": "Hard Bop",
+        "avg_rating": 3.8
+      }
+    ]
+  },
+  {
+    "decade": "1960s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.85
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.76
+      },
+      {
+        "genre": "Hard Rock",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "Pop Rock",
+        "avg_rating": 3.91
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.85
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 4.0
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Hard Bop",
+        "avg_rating": 3.8
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.76
+      },
+      {
+        "genre": "Blues Rock",
+        "avg_rating": 3.78
+      }
+    ]
+  },
+  {
+    "decade": "1970s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.8
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Hard Rock",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Pop Rock",
+        "avg_rating": 3.79
+      },
+      {
+        "genre": "Heavy Metal",
+        "avg_rating": 3.85
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.82
+      },
+      {
+        "genre": "Post-Punk",
+        "avg_rating": 3.83
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 3.87
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.74
+      },
+      {
+        "genre": "Hard Bop",
+        "avg_rating": 3.71
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Blues Rock",
+        "avg_rating": 3.76
+      }
+    ]
+  },
+  {
+    "decade": "1980s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Alternative Rock",
+        "avg_rating": 3.79
+      },
+      {
+        "genre": "Hard Rock",
+        "avg_rating": 3.72
+      },
+      {
+        "genre": "Pop Rock",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Heavy Metal",
+        "avg_rating": 3.76
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.81
+      },
+      {
+        "genre": "Post-Punk",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "East Coast Hip Hop",
+        "avg_rating": 3.8
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.69
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "Indie Rock",
+        "avg_rating": 3.84
+      },
+      {
+        "genre": "Blues Rock",
+        "avg_rating": 3.77
+      }
+    ]
+  },
+  {
+    "decade": "1990s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.72
+      },
+      {
+        "genre": "Alternative Rock",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Hard Rock",
+        "avg_rating": 3.71
+      },
+      {
+        "genre": "Pop Rock",
+        "avg_rating": 3.73
+      },
+      {
+        "genre": "Heavy Metal",
+        "avg_rating": 3.73
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.83
+      },
+      {
+        "genre": "Post-Punk",
+        "avg_rating": 3.8
+      },
+      {
+        "genre": "East Coast Hip Hop",
+        "avg_rating": 3.83
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 3.79
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.73
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.79
+      },
+      {
+        "genre": "Indie Rock",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "Blues Rock",
+        "avg_rating": 3.74
+      }
+    ]
+  },
+  {
+    "decade": "2000s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.71
+      },
+      {
+        "genre": "Alternative Rock",
+        "avg_rating": 3.74
+      },
+      {
+        "genre": "Hard Rock",
+        "avg_rating": 3.72
+      },
+      {
+        "genre": "Pop Rock",
+        "avg_rating": 3.71
+      },
+      {
+        "genre": "Heavy Metal",
+        "avg_rating": 3.72
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.81
+      },
+      {
+        "genre": "Post-Punk",
+        "avg_rating": 3.76
+      },
+      {
+        "genre": "East Coast Hip Hop",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.76
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.77
+      },
+      {
+        "genre": "Indie Rock",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Blues Rock",
+        "avg_rating": 3.75
+      }
+    ]
+  },
+  {
+    "decade": "2010s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.76
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.67
+      },
+      {
+        "genre": "Alternative Rock",
+        "avg_rating": 3.79
+      },
+      {
+        "genre": "Pop Rock",
+        "avg_rating": 3.78
+      },
+      {
+        "genre": "Heavy Metal",
+        "avg_rating": 3.69
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Post-Punk",
+        "avg_rating": 3.67
+      },
+      {
+        "genre": "East Coast Hip Hop",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 3.79
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.74
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Indie Rock",
+        "avg_rating": 3.74
+      }
+    ]
+  },
+  {
+    "decade": "2020s",
+    "genres": [
+      {
+        "genre": "Singer/Songwriter",
+        "avg_rating": 3.75
+      },
+      {
+        "genre": "Progressive Rock",
+        "avg_rating": 3.69
+      },
+      {
+        "genre": "Film Score",
+        "avg_rating": 3.72
+      },
+      {
+        "genre": "Post-Punk",
+        "avg_rating": 3.68
+      },
+      {
+        "genre": "East Coast Hip Hop",
+        "avg_rating": 3.74
+      },
+      {
+        "genre": "Art Rock",
+        "avg_rating": 3.66
+      },
+      {
+        "genre": "Psychedelic Rock",
+        "avg_rating": 3.7
+      },
+      {
+        "genre": "Art Pop",
+        "avg_rating": 3.69
+      },
+      {
+        "genre": "Indie Rock",
+        "avg_rating": 3.63
+      }
+    ]
+  }
+]

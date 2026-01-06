@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>主流派分布 & 各流派平均评分</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    #container {
+      max-width: 900px;
+      margin: 20px auto;
+    }
+
+    .chart-block {
+      margin-bottom: 40px;
+    }
+
+    .axis-label {
+      font-size: 12px;
+      fill: #333;
+    }
+
+    .title {
+      text-align: center;
+      margin: 10px 0;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      border-radius: 4px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center;">主流派分布 & 各流派平均评分（Top 5000 专辑）</h2>
+  <div style="text-align:center;margin-bottom:10px;">
+    <!-- <small>提示：请用本地服务器打开本页面，否则浏览器可能会拦截 CSV 读取。</small> -->
+  </div>
+
+  <div id="container">
+    <div class="chart-block">
+      <h3 class="title">图 3A：Top 流派的专辑数量</h3>
+      <div id="chart-genres-count"></div>
+    </div>
+    <div class="chart-block">
+      <h3 class="title">图 3B：Top 流派的平均评分</h3>
+      <div id="chart-genres-rating"></div>
+    </div>
+  </div>
+
+  <!-- 引入 D3 v7 -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    /***************** 1. 基本配置：字段名 *****************/
+
+    const CSV_FILE      = "rym_top_5000_all_time.csv";
+    const GENRE_FIELD   = "Genres";
+    const RATING_FIELD  = "Average Rating";
+    const TOP_N_GENRES  = 15; // 显示前多少个主流派
+
+    /***************** 2. 画布参数 *****************/
+
+    const margin = { top: 20, right: 30, bottom: 40, left: 140 };
+    const width  = 900 - margin.left - margin.right;
+    const height = 500 - margin.top - margin.bottom;
+
+    const tooltip = d3.select("body")
+      .append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
+    /***************** 3. 读取 & 预处理数据 *****************/
+
+    d3.csv(CSV_FILE).then(rawData => {
+      // 提取主流派 + 评分
+      let records = rawData.map(d => {
+        const rawGenres = d[GENRE_FIELD];
+        const ratingStr = d[RATING_FIELD];
+
+        if (!rawGenres || !ratingStr) return null;
+
+        const mainGenre = rawGenres.split(",")[0].trim();
+        const rating = +ratingStr;
+
+        if (!mainGenre || isNaN(rating)) return null;
+
+        return {
+          mainGenre,
+          rating
+        };
+      }).filter(d => d !== null);
+
+      if (!records.length) {
+        d3.select("#container").append("p").text("数据为空或解析失败，请检查 CSV。");
+        return;
+      }
+
+      // 按主流派聚合：统计数量和平均评分
+      const genreMap = d3.rollups(
+        records,
+        v => ({
+          count: v.length,
+          avgRating: d3.mean(v, d => d.rating)
+        }),
+        d => d.mainGenre
+      );
+
+      let genreStats = genreMap.map(([genre, stats]) => ({
+        genre,
+        count: stats.count,
+        avgRating: stats.avgRating
+      }));
+
+      // 按专辑数量降序排序
+      genreStats.sort((a, b) => b.count - a.count);
+
+      // 只取 Top N 流派
+      genreStats = genreStats.slice(0, TOP_N_GENRES);
+
+      // 排序顺序（两个图共用）
+      const genresOrder = genreStats.map(d => d.genre);
+
+      /***************** 4. 图 3A：Top 流派专辑数量条形图 *****************/
+
+      const svgCount = d3.select("#chart-genres-count")
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom);
+
+      const gCount = svgCount.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const xCount = d3.scaleLinear()
+        .domain([0, d3.max(genreStats, d => d.count)]).nice()
+        .range([0, width]);
+
+      const yCount = d3.scaleBand()
+        .domain(genresOrder)
+        .range([0, height])
+        .padding(0.15);
+
+      const xAxisCount = d3.axisBottom(xCount).ticks(6);
+      const yAxisCount = d3.axisLeft(yCount);
+
+      gCount.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxisCount);
+
+      gCount.append("g")
+        .call(yAxisCount);
+
+      gCount.append("text")
+        .attr("class", "axis-label")
+        .attr("x", width / 2)
+        .attr("y", height + 30)
+        .attr("text-anchor", "middle")
+        .text("专辑数量");
+
+      gCount.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -margin.left + 15)
+        .attr("text-anchor", "middle")
+        .text("主流派（主流派 = Genres 中的第一个流派）");
+
+      gCount.selectAll(".bar-count")
+        .data(genreStats)
+        .enter()
+        .append("rect")
+        .attr("class", "bar-count")
+        .attr("x", 0)
+        .attr("y", d => yCount(d.genre))
+        .attr("width", d => xCount(d.count))
+        .attr("height", yCount.bandwidth())
+        .attr("fill", "#1f77b4")
+        .on("mouseover", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               专辑数量：${d.count}<br/>
+               平均评分：${d.avgRating.toFixed(2)}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      /***************** 5. 图 3B：Top 流派平均评分条形图（最终修正版） *****************/
+
+      const svgRating = d3.select("#chart-genres-rating")
+        .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom);
+
+      const gRating = svgRating.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const minAvg = d3.min(genreStats, d => d.avgRating);
+      const maxAvg = d3.max(genreStats, d => d.avgRating);
+
+      const xRating = d3.scaleLinear()
+        .domain([minAvg, maxAvg]).nice()
+        .range([0, width]);
+
+      const yRating = d3.scaleBand()
+        .domain(genresOrder)
+        .range([0, height])
+        .padding(0.15);
+
+      const xAxisRating = d3.axisBottom(xRating).ticks(6);
+      const yAxisRating = d3.axisLeft(yRating);
+
+      gRating.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxisRating);
+
+      gRating.append("g")
+        .call(yAxisRating);
+
+      gRating.append("text")
+        .attr("class", "axis-label")
+        .attr("x", width / 2)
+        .attr("y", height + 30)
+        .attr("text-anchor", "middle")
+        .text("平均评分");
+
+      gRating.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -margin.left + 15)
+        .attr("text-anchor", "middle")
+        .text("主流派（与上图顺序一致）");
+
+      // ⭐ 关键修正：以“坐标轴最小刻度值”作为基线，而不是 minAvg
+      const domainRating = xRating.domain();   // 例如 [3.70, 3.86]
+      const baseValue    = domainRating[0];    // 3.70
+      const baseX        = xRating(baseValue); // 一般是 0
+
+      gRating.selectAll(".bar-rating")
+        .data(genreStats)
+        .enter()
+        .append("rect")
+        .attr("class", "bar-rating")
+        .attr("x", baseX)
+        .attr("y", d => yRating(d.genre))
+        .attr("width", d => {
+          const w = xRating(d.avgRating) - baseX;
+          return Math.max(2, w); // 防止极端情况下宽度为 0
+        })
+        .attr("height", yRating.bandwidth())
+        .attr("fill", "#ff7f0e")
+        .on("mouseover", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               专辑数量：${d.count}<br/>
+               平均评分：${d.avgRating.toFixed(2)}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+    }).catch(err => {
+      console.error("加载 CSV 出错：", err);
+      d3.select("#container").append("p").text("加载 CSV 失败，请检查文件路径和字段名。");
+    });
+  </script>
+</body>
+</html>

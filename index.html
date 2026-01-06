@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RateYourMusic | 最受欢迎前5000专辑</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background-color: #000;
+      overflow: hidden;
+      color: white;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    /* 棋盘格背景 */
+    .checkerboard {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    /* 扭曲效果 */
+    .distortion {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size: 40px 40px;
+      opacity: 0.9;
+      transform: scale(1.5);
+      animation: wave 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes wave {
+      0% { transform: scale(1.5) rotate(0deg); }
+      100% { transform: scale(1.7) rotate(10deg); }
+    }
+
+    /* 信笺样式卡片 - 缩小并修改为信笺样式 */
+    .card {
+      position: relative;
+      width: 420px;
+      height: 580px;
+      background-color: #FF4500;
+      border-radius: 8px 20px 8px 8px;
+      padding: 30px 25px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+      text-align: center;
+      color: black;
+      font-weight: bold;
+      z-index: 1;
+      border: 4px solid black;
+      overflow: visible; /* 改为 visible 以显示外部图片 */
+      transform: translateY(0);
+      animation: float 4s ease-in-out infinite alternate;
+      background-image: 
+        linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px),
+        linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px);
+      background-size: 20px 25px;
+    }
+
+    /* 信笺折角效果 */
+    .card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, transparent 50%, #e03e00 50%);
+      border-left: 4px solid black;
+      border-bottom: 4px solid black;
+      border-radius: 0 0 0 8px;
+    }
+
+    @keyframes float {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-10px); }
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+      font-size: 14px;
+      letter-spacing: 3px;
+    }
+
+    .card-header .icon {
+      width: 22px;
+      height: 22px;
+      display: inline-block;
+      background-color: black;
+      border-radius: 50%;
+      line-height: 22px;
+      text-align: center;
+      font-size: 10px;
+      color: white;
+      position: relative;
+    }
+
+    .card-header .arrow {
+      width: 22px;
+      height: 22px;
+      display: inline-block;
+      background-color: black;
+      line-height: 22px;
+      text-align: center;
+      font-size: 10px;
+      color: white;
+      transform: rotate(45deg);
+      position: relative;
+    }
+
+    .card-title {
+      font-size: 28px;
+      margin: 15px 0;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: white;
+      text-shadow: 2px 2px 0 black;
+    }
+
+    .card-subtitle {
+      font-size: 20px;
+      margin: 8px 0;
+      letter-spacing: 2px;
+      color: black;
+    }
+
+    .card-author {
+      font-size: 18px;
+      margin: 15px 0;
+      color: black;
+    }
+
+    .card-divider {
+      height: 2px;
+      background-color: black;
+      margin: 15px 0;
+      width: 80%;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .card-barcode {
+      margin-top: 20px;
+      height: 16px;
+      background-color: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 10px;
+      color: white;
+      letter-spacing: 1px;
+    }
+
+    .card-barcode span {
+      width: 15px;
+      height: 100%;
+      background-color: white;
+      margin: 0 1px;
+    }
+
+    .card-barcode span:nth-child(2n) {
+      background-color: black;
+    }
+
+    /* 金色五角星装饰 - 关键修改：将第6颗星星移到左侧 */
+    .gold-star {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      opacity: 1;
+      z-index: 1;
+      animation: drift 12s linear infinite;
+    }
+
+    /* 原有4个星星的位置和延迟 */
+    .gold-star:nth-child(2) {
+      right: 40px;
+      top: 80px;
+      animation-delay: 2s;
+    }
+
+    .gold-star:nth-child(3) {
+      left: 80px;
+      bottom: 120px;
+      animation-delay: 4s;
+    }
+
+    .gold-star:nth-child(4) {
+      right: 120px;
+      bottom: 180px;
+      animation-delay: 6s;
+    }
+
+    /* 新增4个星星的位置和延迟 */
+    .gold-star:nth-child(5) {
+      left: 150px;
+      top: 100px;
+      animation-delay: 1s;
+    }
+
+    /* 关键修改：将原来右侧的第6颗星星移到左侧 */
+    .gold-star:nth-child(6) {
+      left: 250px; /* 从 right 改为 left，移到左侧 */
+      top: 200px;
+      animation-delay: 3s;
+    }
+
+    .gold-star:nth-child(7) {
+      left: 200px;
+      bottom: 80px;
+      animation-delay: 5s;
+    }
+
+    .gold-star:nth-child(8) {
+      right: 80px;
+      top: 300px;
+      animation-delay: 7s;
+    }
+
+    @keyframes drift {
+      0% { transform: translateX(0) translateY(0) rotate(0deg); }
+      50% { transform: translateX(80px) translateY(-40px) rotate(180deg); }
+      100% { transform: translateX(0) translateY(0) rotate(360deg); }
+    }
+
+    /* 按钮 - 适配信笺大小 */
+    .btn {
+      margin-top: 25px;
+      padding: 12px 25px;
+      background-color: #ADFF2F;
+      color: black;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+      letter-spacing: 2px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.5);
+    }
+
+    .btn:hover {
+      background-color: #FFFF00;
+      transform: scale(1.05);
+    }
+
+    /* 底部信息栏 */
+    .footer {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 14px;
+      color: #ADFF2F;
+      letter-spacing: 2px;
+    }
+
+    .footer a {
+      color: #ADFF2F;
+      text-decoration: underline;
+    }
+
+    /* 像素字体样式 */
+    .pixel-text {
+      font-family: 'Press Start 2P', monospace;
+      letter-spacing: 2px;
+    }
+
+    /* 信笺邮票装饰 */
+    .card-stamp {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 50px;
+      height: 50px;
+      border: 2px dashed black;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 10px;
+      transform: rotate(-15deg);
+      background-color: rgba(255, 255, 255, 0.7);
+      z-index: 3;
+    }
+
+    /* Logo 样式 */
+    .logo-container {
+      margin-top: 20px;
+      text-align: center;
+      width: 120px;
+      height: 120px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .logo-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      box-shadow: 0 0 20px rgba(136, 61, 174, 0.5);
+    }
+
+    /* 核心修改：专辑封面容器 - 固定位置不随页面缩放变化 */
+    .album-wrapper {
+      position: fixed; /* 改为 fixed 固定定位，相对于视口而非父元素 */
+      z-index: 5;
+      top: 50%; /* 垂直居中 */
+      transform: translateY(calc(-50% + 10px));
+      width: 200px; /* 固定宽度，避免缩放 */
+      height: 250px; /* 固定高度，避免缩放 */
+    }
+
+    /* 左侧专辑：固定距离页面中心的偏移量 */
+    .album-left {
+      left: calc(50% - 630px); /* 基于页面中心向左偏移（卡片宽度420px + 额外间距） */
+    }
+
+    /* 右侧专辑：固定距离页面中心的偏移量 */
+    .album-right {
+      right: calc(50% - 630px); /* 基于页面中心向右偏移 */
+    }
+
+    .album-stack {
+      position: relative;
+      width: 100%; /* 继承父容器固定宽度 */
+      height: 100%; /* 继承父容器固定高度 */
+    }
+
+    .album-stack img {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 4px;
+      box-shadow: 2px 2px 6px rgba(0,0,0,0.6);
+      transition: transform 0.3s;
+      object-fit: cover; /* 防止图片变形 */
+    }
+
+    /* 左侧堆叠：新增第5张专辑的偏移样式 */
+    .album-left .album-stack img:nth-child(1) { transform: translate(0, 0); z-index: 1; }
+    .album-left .album-stack img:nth-child(2) { transform: translate(40px, 40px); z-index: 2; }
+    .album-left .album-stack img:nth-child(3) { transform: translate(80px, 80px); z-index: 3; }
+    .album-left .album-stack img:nth-child(4) { transform: translate(120px, 120px); z-index: 4;}
+    .album-left .album-stack img:nth-child(5) { transform: translate(160px, 160px); z-index: 5;}
+
+    /* 右侧堆叠：新增第5张专辑的偏移样式 */
+    .album-right .album-stack img:nth-child(1) { transform: translate(0, 0); z-index: 1; }
+    .album-right .album-stack img:nth-child(2) { transform: translate(-40px, 40px); z-index: 2; }
+    .album-right .album-stack img:nth-child(3) { transform: translate(-80px, 80px); z-index: 3; }
+    .album-right .album-stack img:nth-child(4) { transform: translate(-120px, 120px); z-index: 4; }
+    .album-right .album-stack img:nth-child(5) { transform: translate(-160px, 160px); z-index: 5; }
+
+    /* 响应式兜底：小屏幕隐藏专辑（可选） */
+    @media (max-width: 1200px) {
+      .album-wrapper {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 扭曲棋盘格背景 -->
+  <div class="checkerboard">
+    <div class="distortion"></div>
+  </div>
+
+  <!-- 金色五角星装饰 -->
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+
+  <!-- 左侧专辑照片 - 关键修改：新增第5张专辑 album9.jpg -->
+  <div class="album-wrapper album-left">
+    <div class="album-stack">
+      <img src="album1.jpg" alt="Album 1">
+      <img src="album2.jpg" alt="Album 2">
+      <img src="album3.jpg" alt="Album 3">
+      <img src="album7.jpg" alt="Album 7">
+      <img src="album9.jpg" alt="Album 9">
+    </div>
+  </div>
+
+  <!-- 右侧专辑照片 - 关键修改：新增第5张专辑 album10.jpg -->
+  <div class="album-wrapper album-right">
+    <div class="album-stack">
+      <img src="album4.jpg" alt="Album 4">
+      <img src="album5.jpg" alt="Album 5">
+      <img src="album6.jpg" alt="Album 6">
+      <img src="album8.jpg" alt="Album 8">
+      <img src="album10.jpg" alt="Album 10">
+    </div>
+  </div>
+
+  <!-- 信笺样式卡片 -->
+  <div class="card">
+    <div class="card-stamp pixel-text">RYM</div>
+
+    <div class="card-header">
+      <div class="arrow">→</div>
+      <div class="icon">△</div>
+      <div class="arrow">→</div>
+      <div class="icon">🌀</div>
+      <div class="arrow">→</div>
+      <div class="icon">△</div>
+      <div class="arrow">→</div>
+    </div>
+
+    <h1 class="card-title pixel-text">TOP 5000</h1>
+    <h2 class="card-title pixel-text">ALBUMS</h2>
+
+    <div class="card-divider"></div>
+
+    <p class="card-subtitle pixel-text">CREATED BY</p>
+    <p class="card-author pixel-text">GROUP NIUMA</p>
+
+    <div class="card-divider"></div>
+
+    <div class="card-barcode">
+      <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+
+    <button class="btn pixel-text">ENTER</button>
+
+    <!-- Logo 容器 -->
+    <div class="logo-container">
+      <img src="logo.jpg" alt="Logo" class="logo-img">
+    </div>
+  </div>
+
+  <!-- 底部信息栏 -->
+  <div class="footer">
+    data source：<a href="https://rateyourmusic.com">RateYourMusic</a> |
+    © 2025 Group NiuMa |
+    <span style="color: #070200;"> Explore the music universe </span>
+  </div>
+
+  <script>
+    // 使用 D3 创建动态扭曲棋盘格（可选增强）
+    const svg = d3.select("body").append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .style("position", "absolute")
+      .style("top", "0")
+      .style("left", "0")
+      .style("z-index", "-1");
+
+    const pattern = svg.append("defs")
+      .append("pattern")
+      .attr("id", "checkerboard")
+      .attr("width", "40")
+      .attr("height", "40")
+      .attr("patternUnits", "userSpaceOnUse");
+
+    for (let i = 0; i < 10; i++) {
+      for (let j = 0; j < 10; j++) {
+        if ((i + j) % 2 === 0) {
+          pattern.append("rect")
+            .attr("x", i * 40)
+            .attr("y", j * 40)
+            .attr("width", 40)
+            .attr("height", 40)
+            .attr("fill", "#FF4500");
+        } else {
+          pattern.append("rect")
+            .attr("x", i * 40)
+            .attr("y", j * 40)
+            .attr("width", 40)
+            .attr("height", 40)
+            .attr("fill", "#ADFF2F");
+        }
+      }
+    }
+
+    svg.append("rect")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("fill", "url(#checkerboard)")
+      .style("opacity", "0.8")
+      .style("transform", "scale(1.5)");
+
+    setInterval(() => {
+      d3.select("#checkerboard").transition().duration(1000).attr("transform", `scale(${1 + Math.random() * 0.2})`);
+    }, 3000);
+
+    // 按钮点击事件
+    document.addEventListener("DOMContentLoaded", function() {
+      document.querySelector(".btn").addEventListener("click", () => {
+        alert("即将跳转至动态排行榜页面...");
+        window.location.href = "charts_hub.html";
+      });
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>按年份统计专辑数量 & 平均评分 · 详情页</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background:#000;
+      color:#fff;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:24px 16px 40px;
+      position:relative;
+      overflow-x:hidden;
+    }
+    .checkerboard {
+      position:fixed; inset:0; z-index:0; overflow:hidden;
+    }
+    .distortion {
+      position:absolute; inset:0;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size:40px 40px;
+      opacity:.85;
+      transform:scale(1.5);
+      animation:wave 8s ease-in-out infinite alternate;
+    }
+    @keyframes wave{
+      0%{transform:scale(1.5) rotate(0deg);}
+      100%{transform:scale(1.7) rotate(8deg);}
+    }
+    .page-inner{ position:relative; z-index:1; width:100%; max-width:1200px; }
+
+    .header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+    .header-title{
+      font-size:18px;
+      text-shadow:3px 3px 0 #ff4500;
+    }
+    .header-right a{
+      font-size:10px;
+      color:#ADFF2F;
+      text-decoration:none;
+    }
+    .header-right a:hover{ text-decoration:underline; }
+
+    .filter-bar{
+      margin-bottom:18px;
+      padding:10px 16px;
+      border-radius:16px;
+      background:rgba(0,0,0,.6);
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px 16px;
+      align-items:center;
+      justify-content:flex-start;
+      font-size:10px;
+      color:#ADFF2F;
+      box-shadow:0 0 16px rgba(0,0,0,.6);
+    }
+    .filter-bar select{
+      font-family:inherit;
+      font-size:10px;
+      padding:5px 10px;
+      border-radius:10px;
+      border:1px solid #444;
+      background:#FFFAF0;
+      color:#000;
+      box-shadow:0 0 8px rgba(0,0,0,.5);
+      cursor:pointer;
+    }
+    .chart-card{
+      background:rgba(255,251,244,.96);
+      border-radius:28px;
+      box-shadow:0 16px 40px rgba(0,0,0,.4);
+      padding:16px 18px 18px;
+      color:#333;
+      display:flex;
+      flex-direction:column;
+    }
+    .chart-title{
+      font-size:11px;
+      margin-bottom:10px;
+      color:#333;
+    }
+    .chart-wrapper{
+      flex:1;
+      position:relative;
+      aspect-ratio:16/9;
+    }
+    .chart-wrapper svg{ width:100%; height:100%; display:block; }
+
+    .tooltip{
+      position:absolute;
+      background:rgba(255,255,255,.97);
+      border:1px solid #ccc;
+      padding:6px 8px;
+      font-size:12px;
+      pointer-events:none;
+      border-radius:4px;
+      box-shadow:0 0 6px rgba(0,0,0,.35);
+      color:#333;
+      z-index:99;
+    }
+    .footer{
+      margin-top:14px;
+      text-align:center;
+      font-size:9px;
+      color:#ADFF2F;
+    }
+
+    @media(max-width:900px){
+      .chart-wrapper{ aspect-ratio:4/3; }
+    }
+  </style>
+</head>
+<body>
+  <div class="checkerboard"><div class="distortion"></div></div>
+
+  <div class="page-inner">
+    <header class="header">
+      <h1 class="header-title">YEARLY TRENDS · DETAIL VIEW</h1>
+      <div class="header-right">
+        <a href="charts_hub.html">← 返回总览</a>
+      </div>
+    </header>
+
+    <div class="filter-bar">
+      <span>年份范围：</span>
+      <select id="yearRange">
+        <option value="all">全部年份</option>
+        <option value="1950-1970">1950-1970</option>
+        <option value="1970-1990">1970-1990</option>
+        <option value="1990-2010">1990-2010</option>
+        <option value="2010-2030">2010-2025+</option>
+      </select>
+
+      <span>最低平均评分：</span>
+      <select id="minRating">
+        <option value="0">不限</option>
+        <option value="3.7">≥ 3.7</option>
+        <option value="4.0">≥ 4.0</option>
+      </select>
+
+      <span>最少评分人数：</span>
+      <select id="minNumRatings">
+        <option value="0">不限</option>
+        <option value="1000">≥ 1,000</option>
+        <option value="5000">≥ 5,000</option>
+        <option value="10000">≥ 10,000</option>
+      </select>
+    </div>
+
+    <section class="chart-card">
+      <h2 class="chart-title">按年份统计专辑数量 & 平均评分（可筛选）</h2>
+      <div class="chart-wrapper" id="line-detail-chart"></div>
+    </section>
+
+    <div class="footer">
+      数据来源：RateYourMusic · 文件：rym_top_5000_all_time.csv
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    const CSV_FILE = "rym_top_5000_all_time.csv";
+    let allData = [];
+    const tooltip = d3.select("#tooltip");
+
+    d3.csv(CSV_FILE).then(raw => {
+      allData = raw.map(d => {
+        const rating = +d["Average Rating"];
+        let numRatings = d["Number of Ratings"];
+        if (numRatings != null) {
+          numRatings = +String(numRatings).replace(/,/g,"").trim();
+        }
+        const dateStr = String(d["Release Date"] || "").trim();
+        const m = dateStr.match(/(\d{4})/);
+        const year = m ? +m[1] : null;
+
+        return { year, rating, numRatings };
+      }).filter(d => d.year && !isNaN(d.rating) && !isNaN(d.numRatings));
+
+      initFilters();
+      render();
+    }).catch(err => console.error(err));
+
+    function initFilters(){
+      d3.select("#yearRange").on("change", render);
+      d3.select("#minRating").on("change", render);
+      d3.select("#minNumRatings").on("change", render);
+    }
+
+    function getFiltered(){
+      let data = allData;
+
+      const yr = d3.select("#yearRange").property("value");
+      if (yr !== "all"){
+        const [s,e] = yr.split("-").map(Number);
+        data = data.filter(d => d.year >= s && d.year <= e);
+      }
+
+      const minR = +d3.select("#minRating").property("value");
+      if (minR > 0){
+        data = data.filter(d => d.rating >= minR);
+      }
+
+      const minN = +d3.select("#minNumRatings").property("value");
+      if (minN > 0){
+        data = data.filter(d => d.numRatings >= minN);
+      }
+
+      return data;
+    }
+
+    function render(){
+      const data = getFiltered();
+      const container = d3.select("#line-detail-chart");
+      container.selectAll("*").remove();
+
+      if (!data.length){
+        container.append("p")
+          .style("font-size","11px")
+          .style("padding","8px")
+          .style("color","#333")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      const margin = { top:30, right:60, bottom:40, left:60 };
+      const innerWidth = 960;
+      const innerHeight = 540;
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio","xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform",`translate(${margin.left},${margin.top})`);
+
+      const yearMap = d3.rollups(
+        data,
+        v => ({
+          count: v.length,
+          avgRating: d3.mean(v, d => d.rating)
+        }),
+        d => d.year
+      );
+
+      let yearStats = yearMap.map(([year, stats]) => ({
+        year:+year,
+        count:stats.count,
+        avgRating:stats.avgRating
+      }));
+
+      yearStats.sort((a,b)=>a.year-b.year);
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(yearStats,d=>d.year))
+        .range([0,width]);
+
+      const yLeft = d3.scaleLinear()
+        .domain([0, d3.max(yearStats,d=>d.count)]).nice()
+        .range([height,0]);
+
+      const rMin = d3.min(yearStats,d=>d.avgRating);
+      const rMax = d3.max(yearStats,d=>d.avgRating);
+      const pad = 0.05;
+      const yRight = d3.scaleLinear()
+        .domain([rMin-pad, rMax+pad]).nice()
+        .range([height,0]);
+
+      const xAxis = d3.axisBottom(x).tickFormat(d3.format("d"));
+      const yAxisLeft = d3.axisLeft(yLeft).ticks(6);
+      const yAxisRight = d3.axisRight(yRight).ticks(6);
+
+      g.append("g")
+        .attr("transform",`translate(0,${height})`)
+        .call(xAxis);
+
+      g.append("g").call(yAxisLeft);
+
+      g.append("g")
+        .attr("transform",`translate(${width},0)`)
+        .call(yAxisRight);
+
+      g.append("text")
+        .attr("x",width/2)
+        .attr("y",height+30)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("年份");
+
+      g.append("text")
+        .attr("transform","rotate(-90)")
+        .attr("x",-height/2)
+        .attr("y",-40)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("专辑数量");
+
+      g.append("text")
+        .attr("transform","rotate(-90)")
+        .attr("x",-height/2)
+        .attr("y",width+45)
+        .attr("text-anchor","middle")
+        .style("font-size","11px")
+        .text("平均评分");
+
+      const colorCount = "#1f77b4";
+      const colorRating = "#ff7f0e";
+
+      const lineCount = d3.line()
+        .x(d=>x(d.year))
+        .y(d=>yLeft(d.count))
+        .curve(d3.curveMonotoneX);
+
+      const lineRating = d3.line()
+        .x(d=>x(d.year))
+        .y(d=>yRight(d.avgRating))
+        .curve(d3.curveMonotoneX);
+
+      g.append("path")
+        .datum(yearStats)
+        .attr("fill","none")
+        .attr("stroke",colorCount)
+        .attr("stroke-width",2)
+        .attr("d",lineCount);
+
+      g.append("path")
+        .datum(yearStats)
+        .attr("fill","none")
+        .attr("stroke",colorRating)
+        .attr("stroke-width",2)
+        .attr("d",lineRating);
+
+      function showTip(event,d){
+        tooltip
+          .style("opacity",1)
+          .html(
+            `<strong>${d.year} 年</strong><br/>
+             专辑数量：${d.count}<br/>
+             平均评分：${d.avgRating.toFixed(2)}`
+          )
+          .style("left",(event.pageX+10)+"px")
+          .style("top",(event.pageY+10)+"px");
+      }
+      function moveTip(event){
+        tooltip
+          .style("left",(event.pageX+10)+"px")
+          .style("top",(event.pageY+10)+"px");
+      }
+      function hideTip(){
+        tooltip.style("opacity",0);
+      }
+
+      g.selectAll(".dot-count")
+        .data(yearStats)
+        .enter()
+        .append("circle")
+        .attr("class","dot-count")
+        .attr("cx",d=>x(d.year))
+        .attr("cy",d=>yLeft(d.count))
+        .attr("r",3)
+        .attr("fill",colorCount)
+        .on("mouseover",showTip)
+        .on("mousemove",moveTip)
+        .on("mouseout",hideTip);
+
+      g.selectAll(".dot-rating")
+        .data(yearStats)
+        .enter()
+        .append("circle")
+        .attr("class","dot-rating")
+        .attr("cx",d=>x(d.year))
+        .attr("cy",d=>yRight(d.avgRating))
+        .attr("r",3)
+        .attr("fill",colorRating)
+        .on("mouseover",showTip)
+        .on("mousemove",moveTip)
+        .on("mouseout",hideTip);
+
+      const legend = g.append("g")
+        .attr("transform",`translate(${width-160},0)`);
+
+      const items = [
+        { name:"专辑数量（左轴）", color:colorCount },
+        { name:"平均评分（右轴）", color:colorRating }
+      ];
+
+      items.forEach((item,i)=>{
+        const gl = legend.append("g")
+          .attr("transform",`translate(0,${i*18})`);
+
+        gl.append("line")
+          .attr("x1",0).attr("x2",18)
+          .attr("y1",8).attr("y2",8)
+          .attr("stroke",item.color)
+          .attr("stroke-width",3);
+
+        gl.append("text")
+          .attr("x",24)
+          .attr("y",11)
+          .style("font-size","9px")
+          .text(item.name);
+      });
+    }
+  </script>
+</body>
+</html>

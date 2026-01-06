@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>评分 vs 评分人数散点图</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    #chart {
+      max-width: 900px;
+      margin: 20px auto;
+    }
+
+    .axis-label {
+      font-size: 12px;
+      fill: #333;
+    }
+
+    .legend {
+      font-size: 12px;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      border-radius: 4px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
+    }
+
+    .region-line {
+      stroke: #999;
+      stroke-dasharray: 4 4;
+    }
+
+    /* 区域标签：加粗加大，颜色略深 */
+    .region-label {
+      font-size: 14px;
+      fill: #444;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center;">评分 vs 评分人数散点图（Top 5000 专辑）</h2>
+  <div style="text-align:center;margin-bottom:10px;">
+    <!-- <small>提示：请用本地服务器打开本页面，否则浏览器可能会拦截 CSV 读取。</small> -->
+  </div>
+
+  <div id="chart"></div>
+
+  <!-- 引入 D3 v7 -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    /***************** 1. 基本配置：字段名 *****************/
+
+    const CSV_FILE           = "rym_top_5000_all_time.csv";
+    const RATING_FIELD       = "Average Rating";
+    const NUM_RATINGS_FIELD  = "Number of Ratings";
+    const DATE_FIELD         = "Release Date";
+    const ALBUM_FIELD        = "Album";
+    const ARTIST_FIELD       = "Artist Name";
+
+    /***************** 2. 画布设置 *****************/
+
+    const margin = { top: 40, right: 20, bottom: 50, left: 70 };
+    const width  = 900 - margin.left - margin.right;
+    const height = 500 - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom);
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // tooltip
+    const tooltip = d3.select("body").append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
+    /***************** 3. 读取 & 预处理数据 *****************/
+
+    d3.csv(CSV_FILE).then(rawData => {
+      let data = rawData.map(d => {
+        const rating = +d[RATING_FIELD];
+
+        // 去掉逗号并转数字，例如 "70,382" -> 70382
+        let numRatings = d[NUM_RATINGS_FIELD];
+        if (numRatings == null) return null;
+        numRatings = +String(numRatings).replace(/,/g, "").trim();
+
+        const dateStr = String(d[DATE_FIELD] || "").trim();
+        const m = dateStr.match(/(\d{4})/);
+        const year = m ? +m[1] : null;
+
+        let decadeLabel = "Unknown";
+        if (!isNaN(year) && year > 0) {
+          const decade = Math.floor(year / 10) * 10; // 1997 -> 1990
+          decadeLabel = decade + "s";
+        }
+
+        return {
+          rating,
+          numRatings,
+          year,
+          decade: decadeLabel,
+          album: d[ALBUM_FIELD],
+          artist: d[ARTIST_FIELD]
+        };
+      }).filter(d =>
+        d &&
+        !isNaN(d.rating) &&
+        !isNaN(d.numRatings) &&
+        d.numRatings > 0
+      );
+
+      if (!data.length) {
+        d3.select("#chart").append("p").text("数据为空或解析失败，请检查 CSV。");
+        return;
+      }
+
+      /***************** 4. 定义比例尺 & 坐标轴 *****************/
+
+      const ratingExtent = d3.extent(data, d => d.rating);
+      const padding = 0.05;
+
+      const x = d3.scaleLinear()
+        .domain([ratingExtent[0] - padding, ratingExtent[1] + padding]).nice()
+        .range([0, width]);
+
+      const minNum = d3.min(data, d => d.numRatings);
+      const maxNum = d3.max(data, d => d.numRatings);
+
+      // 对数刻度，最小从 1 起
+      const y = d3.scaleLog()
+        .domain([Math.max(1, minNum), maxNum]).nice()
+        .range([height, 0]);
+
+      const xAxis = d3.axisBottom(x);
+      const yAxis = d3.axisLeft(y)
+        .ticks(8, "~s"); // 格式化为类似 1k, 10k
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis);
+
+      g.append("g")
+        .call(yAxis);
+
+      // 坐标轴标题
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", width / 2)
+        .attr("y", height + 40)
+        .attr("text-anchor", "middle")
+        .text("平均评分");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -50)
+        .attr("text-anchor", "middle")
+        .text("评分人数（对数刻度）");
+
+      /***************** 5. 颜色映射：按年代上色 *****************/
+
+      const decades = Array.from(new Set(data.map(d => d.decade)))
+        .sort((a, b) => {
+          if (a === "Unknown") return 1;
+          if (b === "Unknown") return -1;
+          return parseInt(a) - parseInt(b);
+        });
+
+      const palette = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        "#bcbd22", "#17becf", "#aec7e8", "#ffbb78"
+      ];
+
+      const color = d3.scaleOrdinal()
+        .domain(decades)
+        .range(palette);
+
+      /***************** 6. 绘制散点 *****************/
+
+      g.selectAll(".dot")
+        .data(data)
+        .enter()
+        .append("circle")
+        .attr("class", "dot")
+        .attr("cx", d => x(d.rating))
+        .attr("cy", d => y(d.numRatings))
+        .attr("r", 3)
+        .attr("fill", d => color(d.decade))
+        .attr("fill-opacity", 0.7)
+        .on("mouseover", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.album}</strong><br/>
+               ${d.artist}${d.year ? " (" + d.year + ")" : ""}<br/>
+               评分：${d.rating.toFixed(2)}<br/>
+               评分人数：${d.numRatings.toLocaleString()}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      /***************** 7. 区域划分：自动计算阈值 + 画线 + 标注 *****************/
+
+      // 用 70% 分位数作为“高分 / 高人气”的阈值
+      const ratingsSorted = data.map(d => d.rating).sort((a, b) => a - b);
+      const numsSorted    = data.map(d => d.numRatings).sort((a, b) => a - b);
+
+      const ratingThreshold     = d3.quantile(ratingsSorted, 0.7);
+      const numRatingsThreshold = d3.quantile(numsSorted, 0.7);
+
+      // 竖线（评分阈值）
+      g.append("line")
+        .attr("class", "region-line")
+        .attr("x1", x(ratingThreshold))
+        .attr("x2", x(ratingThreshold))
+        .attr("y1", 0)
+        .attr("y2", height);
+
+      // 横线（评分人数阈值）
+      g.append("line")
+        .attr("class", "region-line")
+        .attr("x1", 0)
+        .attr("x2", width)
+        .attr("y1", y(numRatingsThreshold))
+        .attr("y2", y(numRatingsThreshold));
+
+      // === 四个区域的文字标注：放在图的边缘 ===
+      const paddingEdge = 10;
+
+      // 左上：评分 < 阈值 & 人数 > 阈值 —— 爆火但评分一般
+      g.append("text")
+        .attr("class", "region-label")
+        .attr("x", paddingEdge)
+        .attr("y", paddingEdge + 10)
+        .attr("text-anchor", "start")
+        .text("爆火但评分一般");
+
+      // 右上：评分 ≥ 阈值 & 人数 > 阈值 —— 高分爆款
+      g.append("text")
+        .attr("class", "region-label")
+        .attr("x", width - paddingEdge)
+        .attr("y", paddingEdge + 10)
+        .attr("text-anchor", "end")
+        .text("高分爆款");
+
+      // 左下：评分 < 阈值 & 人数 ≤ 阈值 —— 小众且评分一般
+      g.append("text")
+        .attr("class", "region-label")
+        .attr("x", paddingEdge)
+        .attr("y", height - paddingEdge)
+        .attr("text-anchor", "start")
+        .text("小众且评分一般");
+
+      // 右下：评分 ≥ 阈值 & 人数 ≤ 阈值 —— 高分冷门
+      g.append("text")
+        .attr("class", "region-label")
+        .attr("x", width - paddingEdge)
+        .attr("y", height - paddingEdge)
+        .attr("text-anchor", "end")
+        .text("高分冷门");
+
+      /***************** 8. 图例（按年代） *****************/
+
+      const legend = g.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width - 130}, 0)`);
+
+      const legendItem = legend.selectAll(".legend-item")
+        .data(decades)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 18})`);
+
+      legendItem.append("rect")
+        .attr("x", 0)
+        .attr("y", 2)
+        .attr("width", 12)
+        .attr("height", 12)
+        .attr("fill", d => color(d));
+
+      legendItem.append("text")
+        .attr("x", 18)
+        .attr("y", 12)
+        .text(d => d);
+    }).catch(err => {
+      console.error("加载 CSV 出错：", err);
+      d3.select("#chart").append("p").text("加载 CSV 失败，请检查文件路径和字段名。");
+    });
+  </script>
+</body>
+</html>

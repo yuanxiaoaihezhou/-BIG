@@ -1,0 +1,187 @@
+{
+  "genres": [
+    "Progressive Rock",
+    "Singer/Songwriter",
+    "Hard Bop",
+    "Film Score",
+    "Hard Rock",
+    "Heavy Metal",
+    "East Coast Hip Hop",
+    "Video Game Music",
+    "其他"
+  ],
+  "decades": [
+    "1940s",
+    "1950s",
+    "1960s",
+    "1970s",
+    "1980s",
+    "1990s",
+    "2000s",
+    "2010s",
+    "2020s"
+  ],
+  "percentage_data": [
+    {
+      "decade": "1940s",
+      "Progressive Rock": 0.0,
+      "Singer/Songwriter": 0.0,
+      "Hard Bop": 0.0,
+      "Film Score": 0.0,
+      "Hard Rock": 0.0,
+      "Heavy Metal": 0.0,
+      "East Coast Hip Hop": 0.0,
+      "Video Game Music": 0.0,
+      "其他": 100.0
+    },
+    {
+      "decade": "1950s",
+      "Progressive Rock": 0.0,
+      "Singer/Songwriter": 0.0,
+      "Hard Bop": 32.5,
+      "Film Score": 1.67,
+      "Hard Rock": 0.0,
+      "Heavy Metal": 0.0,
+      "East Coast Hip Hop": 0.0,
+      "Video Game Music": 0.0,
+      "其他": 65.83
+    },
+    {
+      "decade": "1960s",
+      "Progressive Rock": 1.06,
+      "Singer/Songwriter": 1.24,
+      "Hard Bop": 13.3,
+      "Film Score": 2.13,
+      "Hard Rock": 0.89,
+      "Heavy Metal": 0.0,
+      "East Coast Hip Hop": 0.0,
+      "Video Game Music": 0.0,
+      "其他": 81.38
+    },
+    {
+      "decade": "1970s",
+      "Progressive Rock": 12.66,
+      "Singer/Songwriter": 4.3,
+      "Hard Bop": 0.16,
+      "Film Score": 1.38,
+      "Hard Rock": 6.33,
+      "Heavy Metal": 0.97,
+      "East Coast Hip Hop": 0.0,
+      "Video Game Music": 0.0,
+      "其他": 74.19
+    },
+    {
+      "decade": "1980s",
+      "Progressive Rock": 1.31,
+      "Singer/Songwriter": 2.33,
+      "Hard Bop": 0.0,
+      "Film Score": 4.22,
+      "Hard Rock": 2.33,
+      "Heavy Metal": 9.16,
+      "East Coast Hip Hop": 1.02,
+      "Video Game Music": 0.15,
+      "其他": 79.51
+    },
+    {
+      "decade": "1990s",
+      "Progressive Rock": 1.67,
+      "Singer/Songwriter": 2.87,
+      "Hard Bop": 0.0,
+      "Film Score": 1.85,
+      "Hard Rock": 0.93,
+      "Heavy Metal": 2.04,
+      "East Coast Hip Hop": 5.93,
+      "Video Game Music": 2.78,
+      "其他": 81.94
+    },
+    {
+      "decade": "2000s",
+      "Progressive Rock": 3.51,
+      "Singer/Songwriter": 4.42,
+      "Hard Bop": 0.0,
+      "Film Score": 2.27,
+      "Hard Rock": 0.23,
+      "Heavy Metal": 1.13,
+      "East Coast Hip Hop": 2.15,
+      "Video Game Music": 3.63,
+      "其他": 82.65
+    },
+    {
+      "decade": "2010s",
+      "Progressive Rock": 1.31,
+      "Singer/Songwriter": 2.36,
+      "Hard Bop": 0.0,
+      "Film Score": 3.4,
+      "Hard Rock": 0.0,
+      "Heavy Metal": 0.26,
+      "East Coast Hip Hop": 2.62,
+      "Video Game Music": 7.85,
+      "其他": 82.2
+    },
+    {
+      "decade": "2020s",
+      "Progressive Rock": 0.0,
+      "Singer/Songwriter": 5.88,
+      "Hard Bop": 0.0,
+      "Film Score": 1.96,
+      "Hard Rock": 0.0,
+      "Heavy Metal": 0.0,
+      "East Coast Hip Hop": 0.0,
+      "Video Game Music": 5.88,
+      "其他": 86.27
+    }
+  ],
+  "rating_data": [
+    {
+      "decade": "1940s",
+      "avg_rating": 3.73,
+      "album_count": 1
+    },
+    {
+      "decade": "1950s",
+      "avg_rating": 3.8,
+      "album_count": 120
+    },
+    {
+      "decade": "1960s",
+      "avg_rating": 3.8,
+      "album_count": 564
+    },
+    {
+      "decade": "1970s",
+      "avg_rating": 3.78,
+      "album_count": 1232
+    },
+    {
+      "decade": "1980s",
+      "avg_rating": 3.77,
+      "album_count": 688
+    },
+    {
+      "decade": "1990s",
+      "avg_rating": 3.77,
+      "album_count": 1080
+    },
+    {
+      "decade": "2000s",
+      "avg_rating": 3.75,
+      "album_count": 882
+    },
+    {
+      "decade": "2010s",
+      "avg_rating": 3.75,
+      "album_count": 382
+    },
+    {
+      "decade": "2020s",
+      "avg_rating": 3.73,
+      "album_count": 51
+    }
+  ],
+  "metadata": {
+    "total_albums": 5000,
+    "total_decades": 9,
+    "total_genres": 9,
+    "data_source": "RYM Top 5000 All Time Albums"
+  }
+}

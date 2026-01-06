@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>按年代统计专辑数量 & 评分走势</title>
+  <style>
+    body {
+      font-family: sans-serif;
+    }
+
+    #chart {
+      max-width: 900px;
+      margin: 20px auto;
+    }
+
+    .axis-label {
+      font-size: 12px;
+      fill: #333;
+    }
+
+    .legend {
+      font-size: 12px;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      border-radius: 4px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center;">Top 专辑按年份的数量与平均评分走势</h2>
+  <div style="text-align:center;margin-bottom:10px;">
+    <!-- 如果你用本地服务器加载，就不用这个提示 -->
+    <!-- <small>提示：请用本地服务器打开本页面，否则浏览器可能会拦截 CSV 读取。</small> -->
+  </div>
+
+  <div id="chart"></div>
+
+  <!-- 引入 D3 v7 -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    /***************** 1. 基本配置区域（根据你自己的 CSV 改这里） *****************/
+
+    // CSV 文件名
+    const CSV_FILE = "rym_top_5000_all_time.csv";
+
+    // CSV 中的字段名（根据你的实际列名调整）
+    // 下面是“猜的”列名，你需要打开 CSV 看一下真实名字，比如：
+    // "Release Date" / "release_date" / "Year" 等
+    const DATE_FIELD   = "Release Date";     // 发行日期字段
+    const RATING_FIELD = "Average Rating";   // 平均评分字段名
+
+    /***************** 2. 画布 & SVG *****************/
+
+    const margin = { top: 40, right: 60, bottom: 50, left: 60 };
+    const width  = 900 - margin.left - margin.right;
+    const height = 450 - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom);
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // tooltip
+    const tooltip = d3.select("body").append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
+    /***************** 3. 读取 & 预处理数据 *****************/
+
+    d3.csv(CSV_FILE).then(rawData => {
+      // 过滤掉缺失值
+      let data = rawData.filter(d => d[DATE_FIELD] && d[RATING_FIELD]);
+
+      // 提取年份 & 转数字
+      data.forEach(d => {
+        const dateStr = String(d[DATE_FIELD]).trim();
+
+        // 尝试从字符串中提取 4 位年份（比如 "1997-03-07" / "May 2003" / "1994"）
+        const match = dateStr.match(/(\d{4})/);
+        let year = null;
+        if (match) {
+          year = +match[1];
+        }
+
+        d.year = year;
+        d.rating = +d[RATING_FIELD];
+      });
+
+      // 去掉不能解析的年份或评分
+      data = data.filter(d => d.year && !isNaN(d.rating));
+
+      // 按年份聚合：统计数量和平均评分
+      // yearStats: [{ year, count, avgRating }, ...]
+      const yearMap = d3.rollups(
+        data,
+        v => ({
+          count: v.length,
+          avgRating: d3.mean(v, d => d.rating)
+        }),
+        d => d.year
+      );
+
+      let yearStats = yearMap.map(([year, stats]) => ({
+        year: +year,
+        count: stats.count,
+        avgRating: stats.avgRating
+      }));
+
+      // 按年份排序
+      yearStats.sort((a, b) => a.year - b.year);
+
+      /***************** 4. 定义比例尺 & 坐标轴 *****************/
+
+      // x 轴：年份
+      const x = d3.scaleLinear()
+        .domain(d3.extent(yearStats, d => d.year))
+        .range([0, width]);
+
+      // y 轴（左）：专辑数量
+      const yLeft = d3.scaleLinear()
+        .domain([0, d3.max(yearStats, d => d.count)]).nice()
+        .range([height, 0]);
+
+      // y 轴（右）：平均评分
+      const ratingMin = d3.min(yearStats, d => d.avgRating);
+      const ratingMax = d3.max(yearStats, d => d.avgRating);
+      const padding = 0.1; // 评分轴稍微留一点余量
+      const yRight = d3.scaleLinear()
+        .domain([ratingMin - padding, ratingMax + padding]).nice()
+        .range([height, 0]);
+
+      const xAxis = d3.axisBottom(x)
+        .tickFormat(d3.format("d")); // 不要科学计数法
+
+      const yAxisLeft = d3.axisLeft(yLeft);
+      const yAxisRight = d3.axisRight(yRight);
+
+      // 绘制坐标轴
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis);
+
+      g.append("g")
+        .call(yAxisLeft);
+
+      g.append("g")
+        .attr("transform", `translate(${width},0)`)
+        .call(yAxisRight);
+
+      // 轴标题
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", width / 2)
+        .attr("y", height + 35)
+        .attr("text-anchor", "middle")
+        .text("年份");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -45)
+        .attr("text-anchor", "middle")
+        .text("专辑数量");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", width + 45)
+        .attr("text-anchor", "middle")
+        .text("平均评分");
+
+      /***************** 5. 画两条折线 *****************/
+
+      const colorCount = "#1f77b4";  // 数量线（蓝色）
+      const colorRating = "#ff7f0e"; // 评分线（橙色）
+
+      // 专辑数量折线
+      const lineCount = d3.line()
+        .x(d => x(d.year))
+        .y(d => yLeft(d.count))
+        .curve(d3.curveMonotoneX);
+
+      // 平均评分折线
+      const lineRating = d3.line()
+        .x(d => x(d.year))
+        .y(d => yRight(d.avgRating))
+        .curve(d3.curveMonotoneX);
+
+      // 画数量线
+      g.append("path")
+        .datum(yearStats)
+        .attr("fill", "none")
+        .attr("stroke", colorCount)
+        .attr("stroke-width", 2)
+        .attr("d", lineCount);
+
+      // 画评分线
+      g.append("path")
+        .datum(yearStats)
+        .attr("fill", "none")
+        .attr("stroke", colorRating)
+        .attr("stroke-width", 2)
+        .attr("d", lineRating);
+
+      /***************** 6. 在每个年份画交互点（用于 tooltip） *****************/
+
+      // 对数量线上的点
+      g.selectAll(".dot-count")
+        .data(yearStats)
+        .enter()
+        .append("circle")
+        .attr("class", "dot-count")
+        .attr("cx", d => x(d.year))
+        .attr("cy", d => yLeft(d.count))
+        .attr("r", 3)
+        .attr("fill", colorCount)
+        .on("mouseover", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.year} 年</strong><br>
+               专辑数量: ${d.count}<br>
+               平均评分: ${d.avgRating.toFixed(2)}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      // 对评分线上的点
+      g.selectAll(".dot-rating")
+        .data(yearStats)
+        .enter()
+        .append("circle")
+        .attr("class", "dot-rating")
+        .attr("cx", d => x(d.year))
+        .attr("cy", d => yRight(d.avgRating))
+        .attr("r", 3)
+        .attr("fill", colorRating)
+        .on("mouseover", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.year} 年</strong><br>
+               专辑数量: ${d.count}<br>
+               平均评分: ${d.avgRating.toFixed(2)}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      /***************** 7. 图例 *****************/
+
+      const legend = g.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width - 160}, 0)`);
+
+      const legendItems = [
+        { name: "专辑数量（左轴）", color: colorCount },
+        { name: "平均评分（右轴）", color: colorRating }
+      ];
+
+      legendItems.forEach((item, i) => {
+        const gLegend = legend.append("g")
+          .attr("transform", `translate(0, ${i * 20})`);
+
+        gLegend.append("line")
+          .attr("x1", 0)
+          .attr("x2", 20)
+          .attr("y1", 8)
+          .attr("y2", 8)
+          .attr("stroke", item.color)
+          .attr("stroke-width", 3);
+
+        gLegend.append("text")
+          .attr("x", 26)
+          .attr("y", 12)
+          .text(item.name);
+      });
+    }).catch(err => {
+      console.error("加载 CSV 出错：", err);
+      d3.select("#chart").append("p").text("加载 CSV 失败，请检查文件路径和字段名。");
+    });
+  </script>
+</body>
+</html>

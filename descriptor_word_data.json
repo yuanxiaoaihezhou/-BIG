@@ -1,0 +1,642 @@
+[
+  {
+    "text": "male vocals",
+    "count": 3062
+  },
+  {
+    "text": "melodic",
+    "count": 1743
+  },
+  {
+    "text": "energetic",
+    "count": 1354
+  },
+  {
+    "text": "passionate",
+    "count": 1188
+  },
+  {
+    "text": "atmospheric",
+    "count": 1043
+  },
+  {
+    "text": "melancholic",
+    "count": 997
+  },
+  {
+    "text": "rhythmic",
+    "count": 992
+  },
+  {
+    "text": "instrumental",
+    "count": 881
+  },
+  {
+    "text": "playful",
+    "count": 775
+  },
+  {
+    "text": "warm",
+    "count": 769
+  },
+  {
+    "text": "dark",
+    "count": 732
+  },
+  {
+    "text": "heavy",
+    "count": 688
+  },
+  {
+    "text": "mellow",
+    "count": 662
+  },
+  {
+    "text": "bittersweet",
+    "count": 654
+  },
+  {
+    "text": "female vocals",
+    "count": 588
+  },
+  {
+    "text": "complex",
+    "count": 581
+  },
+  {
+    "text": "progressive",
+    "count": 575
+  },
+  {
+    "text": "psychedelic",
+    "count": 568
+  },
+  {
+    "text": "introspective",
+    "count": 562
+  },
+  {
+    "text": "acoustic",
+    "count": 540
+  },
+  {
+    "text": "lush",
+    "count": 539
+  },
+  {
+    "text": "epic",
+    "count": 531
+  },
+  {
+    "text": "poetic",
+    "count": 522
+  },
+  {
+    "text": "sombre",
+    "count": 491
+  },
+  {
+    "text": "raw",
+    "count": 478
+  },
+  {
+    "text": "technical",
+    "count": 472
+  },
+  {
+    "text": "nocturnal",
+    "count": 471
+  },
+  {
+    "text": "urban",
+    "count": 466
+  },
+  {
+    "text": "aggressive",
+    "count": 447
+  },
+  {
+    "text": "love",
+    "count": 440
+  },
+  {
+    "text": "uplifting",
+    "count": 416
+  },
+  {
+    "text": "eclectic",
+    "count": 405
+  },
+  {
+    "text": "anxious",
+    "count": 399
+  },
+  {
+    "text": "romantic",
+    "count": 378
+  },
+  {
+    "text": "hypnotic",
+    "count": 368
+  },
+  {
+    "text": "improvisation",
+    "count": 366
+  },
+  {
+    "text": "lonely",
+    "count": 355
+  },
+  {
+    "text": "mysterious",
+    "count": 352
+  },
+  {
+    "text": "political",
+    "count": 331
+  },
+  {
+    "text": "conscious",
+    "count": 330
+  },
+  {
+    "text": "surreal",
+    "count": 327
+  },
+  {
+    "text": "concept album",
+    "count": 318
+  },
+  {
+    "text": "ominous",
+    "count": 318
+  },
+  {
+    "text": "dense",
+    "count": 311
+  },
+  {
+    "text": "avant-garde",
+    "count": 282
+  },
+  {
+    "text": "death",
+    "count": 277
+  },
+  {
+    "text": "quirky",
+    "count": 276
+  },
+  {
+    "text": "sentimental",
+    "count": 276
+  },
+  {
+    "text": "angry",
+    "count": 275
+  },
+  {
+    "text": "sampling",
+    "count": 270
+  },
+  {
+    "text": "ethereal",
+    "count": 269
+  },
+  {
+    "text": "repetitive",
+    "count": 267
+  },
+  {
+    "text": "spiritual",
+    "count": 267
+  },
+  {
+    "text": "soothing",
+    "count": 266
+  },
+  {
+    "text": "noisy",
+    "count": 265
+  },
+  {
+    "text": "pastoral",
+    "count": 264
+  },
+  {
+    "text": "rebellious",
+    "count": 264
+  },
+  {
+    "text": "uncommon time signatures",
+    "count": 249
+  },
+  {
+    "text": "longing",
+    "count": 243
+  },
+  {
+    "text": "sarcastic",
+    "count": 231
+  },
+  {
+    "text": "humorous",
+    "count": 229
+  },
+  {
+    "text": "calm",
+    "count": 221
+  },
+  {
+    "text": "manic",
+    "count": 219
+  },
+  {
+    "text": "summer",
+    "count": 217
+  },
+  {
+    "text": "fantasy",
+    "count": 216
+  },
+  {
+    "text": "cold",
+    "count": 205
+  },
+  {
+    "text": "cryptic",
+    "count": 205
+  },
+  {
+    "text": "suspenseful",
+    "count": 203
+  },
+  {
+    "text": "anthemic",
+    "count": 201
+  },
+  {
+    "text": "drugs",
+    "count": 199
+  },
+  {
+    "text": "sexual",
+    "count": 199
+  },
+  {
+    "text": "soft",
+    "count": 188
+  },
+  {
+    "text": "depressive",
+    "count": 182
+  },
+  {
+    "text": "philosophical",
+    "count": 177
+  },
+  {
+    "text": "dissonant",
+    "count": 177
+  },
+  {
+    "text": "futuristic",
+    "count": 172
+  },
+  {
+    "text": "lo-fi",
+    "count": 171
+  },
+  {
+    "text": "triumphant",
+    "count": 169
+  },
+  {
+    "text": "peaceful",
+    "count": 164
+  },
+  {
+    "text": "violence",
+    "count": 161
+  },
+  {
+    "text": "apocalyptic",
+    "count": 161
+  },
+  {
+    "text": "chaotic",
+    "count": 161
+  },
+  {
+    "text": "misanthropic",
+    "count": 157
+  },
+  {
+    "text": "orchestral",
+    "count": 156
+  },
+  {
+    "text": "boastful",
+    "count": 150
+  },
+  {
+    "text": "meditative",
+    "count": 149
+  },
+  {
+    "text": "autumn",
+    "count": 146
+  },
+  {
+    "text": "sad",
+    "count": 144
+  },
+  {
+    "text": "existential",
+    "count": 143
+  },
+  {
+    "text": "abstract",
+    "count": 142
+  },
+  {
+    "text": "science fiction",
+    "count": 138
+  },
+  {
+    "text": "happy",
+    "count": 137
+  },
+  {
+    "text": "sensual",
+    "count": 133
+  },
+  {
+    "text": "crime",
+    "count": 131
+  },
+  {
+    "text": "religious",
+    "count": 121
+  },
+  {
+    "text": "breakup",
+    "count": 119
+  },
+  {
+    "text": "tropical",
+    "count": 112
+  },
+  {
+    "text": "pessimistic",
+    "count": 111
+  },
+  {
+    "text": "mechanical",
+    "count": 110
+  },
+  {
+    "text": "occult",
+    "count": 107
+  },
+  {
+    "text": "minimalistic",
+    "count": 103
+  },
+  {
+    "text": "space",
+    "count": 103
+  },
+  {
+    "text": "optimistic",
+    "count": 101
+  },
+  {
+    "text": "nature",
+    "count": 101
+  },
+  {
+    "text": "sparse",
+    "count": 95
+  },
+  {
+    "text": "protest",
+    "count": 92
+  },
+  {
+    "text": "alienation",
+    "count": 91
+  },
+  {
+    "text": "satirical",
+    "count": 91
+  },
+  {
+    "text": "nihilistic",
+    "count": 90
+  },
+  {
+    "text": "winter",
+    "count": 87
+  },
+  {
+    "text": "war",
+    "count": 85
+  },
+  {
+    "text": "infernal",
+    "count": 81
+  },
+  {
+    "text": "folklore",
+    "count": 79
+  },
+  {
+    "text": "mythology",
+    "count": 78
+  },
+  {
+    "text": "hedonistic",
+    "count": 77
+  },
+  {
+    "text": "christian",
+    "count": 76
+  },
+  {
+    "text": "vulgar",
+    "count": 71
+  },
+  {
+    "text": "party",
+    "count": 70
+  },
+  {
+    "text": "medieval",
+    "count": 67
+  },
+  {
+    "text": "history",
+    "count": 64
+  },
+  {
+    "text": "serious",
+    "count": 62
+  },
+  {
+    "text": "choral",
+    "count": 61
+  },
+  {
+    "text": "forest",
+    "count": 59
+  },
+  {
+    "text": "spring",
+    "count": 59
+  },
+  {
+    "text": "lgbt",
+    "count": 51
+  },
+  {
+    "text": "alcohol",
+    "count": 51
+  },
+  {
+    "text": "ritualistic",
+    "count": 51
+  },
+  {
+    "text": "anti-religious",
+    "count": 50
+  },
+  {
+    "text": "desert",
+    "count": 49
+  },
+  {
+    "text": "rock opera",
+    "count": 47
+  },
+  {
+    "text": "pagan",
+    "count": 47
+  },
+  {
+    "text": "suite",
+    "count": 44
+  },
+  {
+    "text": "hateful",
+    "count": 44
+  },
+  {
+    "text": "disturbing",
+    "count": 42
+  },
+  {
+    "text": "lethargic",
+    "count": 42
+  },
+  {
+    "text": "satanic",
+    "count": 41
+  },
+  {
+    "text": "tribal",
+    "count": 40
+  },
+  {
+    "text": "funereal",
+    "count": 39
+  },
+  {
+    "text": "scary",
+    "count": 39
+  },
+  {
+    "text": "androgynous vocals",
+    "count": 37
+  },
+  {
+    "text": "self-hatred",
+    "count": 35
+  },
+  {
+    "text": "aquatic",
+    "count": 34
+  },
+  {
+    "text": "apathetic",
+    "count": 34
+  },
+  {
+    "text": "deadpan",
+    "count": 34
+  },
+  {
+    "text": "atonal",
+    "count": 33
+  },
+  {
+    "text": "polyphonic",
+    "count": 31
+  },
+  {
+    "text": "ballad",
+    "count": 28
+  },
+  {
+    "text": "suicide",
+    "count": 26
+  },
+  {
+    "text": "chamber music",
+    "count": 26
+  },
+  {
+    "text": "...",
+    "count": 26
+  },
+  {
+    "text": "rain",
+    "count": 25
+  },
+  {
+    "text": "paranormal",
+    "count": 25
+  },
+  {
+    "text": "anarchism",
+    "count": 23
+  },
+  {
+    "text": "wall of sound",
+    "count": 22
+  },
+  {
+    "text": "symphony",
+    "count": 21
+  },
+  {
+    "text": "martial",
+    "count": 20
+  },
+  {
+    "text": "vocal group",
+    "count": 17
+  },
+  {
+    "text": "natural",
+    "count": 17
+  },
+  {
+    "text": "string quartet",
+    "count": 13
+  },
+  {
+    "text": "halloween",
+    "count": 13
+  }
+]

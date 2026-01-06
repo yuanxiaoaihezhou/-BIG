@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>RYM Top 5000 专辑 · 数据可视化中心</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.7/build/d3.layout.cloud.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background-color: #000;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 24px 16px 40px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* 背景棋盘格 + 扭曲层（与封面统一） */
+    .checkerboard {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .distortion {
+      position: absolute;
+      inset: 0;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size: 40px 40px;
+      opacity: 0.85;
+      transform: scale(1.5);
+      animation: wave 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes wave {
+      0% { transform: scale(1.5) rotate(0deg); }
+      100% { transform: scale(1.7) rotate(8deg); }
+    }
+
+    /* 金色五角星装饰 */
+    .gold-star {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      opacity: 1;
+      z-index: 1;
+      animation: drift 12s linear infinite;
+    }
+
+    .gold-star:nth-child(2) { right: 80px; top: 60px; animation-delay: 1s; }
+    .gold-star:nth-child(3) { left: 90px; bottom: 120px; animation-delay: 3s; }
+    .gold-star:nth-child(4) { right: 160px; bottom: 160px; animation-delay: 5s; }
+
+    @keyframes drift {
+      0% { transform: translateX(0) translateY(0) rotate(0deg); }
+      50% { transform: translateX(70px) translateY(-30px) rotate(180deg); }
+      100% { transform: translateX(0) translateY(0) rotate(360deg); }
+    }
+
+    .pixel-text {
+      font-family: 'Press Start 2P', monospace;
+      letter-spacing: 2px;
+    }
+
+    .page-inner {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 1450px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    .header-title {
+      font-size: 20px;
+      text-shadow: 3px 3px 0 #ff4500;
+      margin-bottom: 8px;
+    }
+
+    .header-subtitle {
+      font-size: 10px;
+      color: #ADFF2F;
+    }
+
+    /* 统一筛选栏 */
+    .filter-bar {
+      margin: 18px auto 22px;
+      padding: 10px 16px;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.55);
+      box-shadow: 0 0 16px rgba(0,0,0,0.6);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #ADFF2F;
+    }
+
+    .filter-bar label {
+      margin-right: 4px;
+    }
+
+    .filter-bar select {
+      font-family: inherit;
+      font-size: 10px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: #FFFAF0;
+      color: #000;
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
+      cursor: pointer;
+    }
+
+    /* 网格布局：左上热力图，中间大散点，右上折线，右下词云 */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1.8fr 1.1fr;
+      grid-template-rows: minmax(260px, 1fr) minmax(280px, 1fr); /* 增加最小高度 */
+      gap: 20px;
+      width: 100%;
+    }
+
+    .chart-card {
+      background: rgba(255, 251, 244, 0.96);
+      border-radius: 28px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+      padding: 16px 18px 14px;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+      cursor: pointer;                            /* 新增：鼠标变小手 */
+      transition: transform 0.25s, box-shadow 0.25s;  /* 新增：悬浮动效 */
+    }
+
+    .chart-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    }
+
+    .chart-card-title {
+      font-size: 11px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .chart-card-title span {
+      font-size: 9px;
+      color: #ff4500;
+      margin-right: 6px;
+    }
+
+    .chart-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    /* 使用 aspect-ratio 让不同卡片有不同高宽比，方便缩放适配 */
+    #card-heat .chart-wrapper { aspect-ratio: 4 / 3; }
+    #card-line .chart-wrapper { aspect-ratio: 4 / 3; }
+    #card-scatter .chart-wrapper { aspect-ratio: 16 / 9; }
+    #card-wordcloud .chart-wrapper { 
+      aspect-ratio: 4 / 3; 
+      min-height: 280px; /* 确保词云有足够空间 */
+    }
+
+    .chart-wrapper svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #card-heat { grid-column: 1; grid-row: 1 / 2; }
+    #card-scatter { grid-column: 2; grid-row: 1 / 3; }
+    #card-line { grid-column: 3; grid-row: 1 / 2; }
+    #card-wordcloud { grid-column: 3; grid-row: 2 / 3; }
+
+    /* tooltip 统一样式 */
+    .tooltip {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.97);
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 12px;
+      pointer-events: none;
+      border-radius: 4px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.35);
+      color: #333;
+      z-index: 99;
+      max-width: 300px;
+      word-wrap: break-word;
+    }
+
+    /* 词云专属样式 - 移除了hover放大效果 */
+    .word {
+      cursor: default;
+      font-weight: bold !important;
+      font-family: Impact, sans-serif !important;
+      /* 移除了transition和hover放大效果 */
+    }
+
+    /* 移除词云专属tooltip样式，统一使用全局tooltip */
+    .no-data {
+      text-align: center;
+      padding: 50px;
+      color: #666;
+      font-size: 1.1rem;
+    }
+
+    .footer {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 9px;
+      color: #ADFF2F;
+    }
+
+    .footer a {
+      color: #ADFF2F;
+      text-decoration: underline;
+    }
+
+    @media (max-width: 1100px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+      }
+      #card-heat, #card-scatter, #card-line, #card-wordcloud {
+        grid-column: auto;
+        grid-row: auto;
+      }
+      #card-scatter .chart-wrapper { aspect-ratio: 4 / 3; }
+      #card-wordcloud .chart-wrapper { 
+        min-height: 240px; 
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 背景 -->
+  <div class="checkerboard">
+    <div class="distortion"></div>
+  </div>
+
+  <!-- 金色星星 -->
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+  <div class="gold-star">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="12,2 15.6,10.8 24,11.2 17.6,14.8 19.2,23 12,18.4 4.8,23 6.4,14.8 0,11.2 8.4,10.8"
+               fill="#FFD700" stroke="black" stroke-width="1" fill-opacity="1"/>
+    </svg>
+  </div>
+
+  <div class="page-inner">
+    <header class="header">
+      <h1 class="header-title pixel-text">RYM TOP 5000 · DATA VISUALIZER</h1>
+      <p class="header-subtitle pixel-text">筛选年代后，所有图表会同步更新</p>
+    </header>
+
+    <!-- 筛选栏 -->
+    <div class="filter-bar pixel-text">
+      <label for="decadeFilter">筛选年代：</label>
+      <select id="decadeFilter"></select>
+
+      <label for="minGenreCount">最小流派出现次数：</label>
+      <select id="minGenreCount">
+        <option value="10">10+ 专辑</option>
+        <option value="20" selected>20+ 专辑</option>
+        <option value="30">30+ 专辑</option>
+        <option value="50">50+ 专辑</option>
+      </select>
+    </div>
+
+    <!-- 四张图表 -->
+    <main class="charts-grid">
+      <section class="chart-card" id="card-heat">
+        <h3 class="chart-card-title pixel-text">
+          <span>CHART 01</span>音乐流派流行度热力图
+        </h3>
+        <div class="chart-wrapper" id="chart-heat"></div>
+      </section>
+
+      <section class="chart-card" id="card-scatter">
+        <h3 class="chart-card-title pixel-text">
+          <span>CHART 02</span>专辑评分与人气分布
+        </h3>
+        <div class="chart-wrapper" id="chart-scatter"></div>
+      </section>
+
+      <section class="chart-card" id="card-line">
+        <h3 class="chart-card-title pixel-text">
+          <span>CHART 03</span>按年份统计专辑数量 & 平均评分
+        </h3>
+        <div class="chart-wrapper" id="chart-line"></div>
+      </section>
+
+      <section class="chart-card" id="card-wordcloud">
+        <h3 class="chart-card-title pixel-text">
+          <span>CHART 04</span>专辑描述词云分析
+        </h3>
+        <div class="chart-wrapper" id="chart-wordcloud"></div>
+      </section>
+    </main>
+
+    <div class="footer">
+      <span class="pixel-text">
+        数据来源：<a href="https://rateyourmusic.com" target="_blank">RateYourMusic</a> ·
+        © 2025 Group NiuMa
+      </span>
+    </div>
+  </div>
+
+  <!-- 统一 tooltip -->
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    /************** 1. 全局数据 & 筛选状态 **************/
+    const CSV_FILE = "rym_top_5000_all_time.csv";
+    const WORDCLOUD_DATA_FILE = "decade_word_data.json";
+
+    let allData = [];
+    let currentDecade = "all";
+    let currentMinGenreCount = 20;
+    let wordData = {};
+    let resizeTimeout = null;
+
+    const tooltip = d3.select("#tooltip");
+    
+    // 颜色比例尺（词云专用）
+    const colorScale = d3.scaleOrdinal()
+      .range(d3.schemeCategory10);
+
+    // 先加载CSV数据，再加载词云数据
+    Promise.all([
+      d3.csv(CSV_FILE),
+      d3.json(WORDCLOUD_DATA_FILE).catch(error => {
+        console.error("❌ 词频数据加载失败:", error);
+        return null;
+      })
+    ]).then(([csvData, wordJsonData]) => {
+      // 处理CSV数据
+      allData = csvData.map(d => {
+        const rating = +d["Average Rating"];
+
+        let numRatingsRaw = d["Number of Ratings"];
+        let numRatings = null;
+        if (numRatingsRaw != null) {
+          numRatings = +String(numRatingsRaw).replace(/,/g, "").trim();
+        }
+
+        const dateStr = String(d["Release Date"] || "").trim();
+        const m = dateStr.match(/(\d{4})/);
+        const year = m ? +m[1] : null;
+
+        let decade = "Unknown";
+        if (year && year > 0) {
+          const dec = Math.floor(year / 10) * 10;
+          decade = dec + "s";
+        }
+
+        const genresStr = d["Genres"] || "";
+        const genreList = genresStr
+          .split(",")
+          .map(s => s.trim())
+          .filter(Boolean);
+
+        return {
+          album: d["Album"],
+          artist: d["Artist Name"],
+          rating,
+          numRatings,
+          year,
+          decade,
+          genresStr,
+          genreList
+        };
+      }).filter(d =>
+        d.year &&
+        !isNaN(d.rating) &&
+        !isNaN(d.numRatings) &&
+        d.numRatings > 0
+      );
+
+      // 处理词云数据
+      if (wordJsonData) {
+        wordData = cleanWordData(wordJsonData);
+        console.log("✅ 词频数据加载并清洗完成", wordData);
+      }
+
+      initFilters();
+      renderAll();
+
+      // 监听窗口大小变化，更新词云
+      window.addEventListener("resize", () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          updateWordCloud(currentDecade);
+        }, 300);
+      });
+    }).catch(err => {
+      console.error("加载数据出错：", err);
+    });
+
+    /**
+     * 清洗词频数据，过滤异常关键词
+     * @param {object} rawData - 原始词频数据
+     * @returns {object} 清洗后的词频数据
+     */
+    function cleanWordData(rawData) {
+      const cleanedData = {};
+      
+      // 遍历所有年代的数据
+      Object.keys(rawData).forEach(decade => {
+        const words = rawData[decade];
+        
+        // 过滤规则：
+        // 1. 排除包含"..."的关键词
+        // 2. 排除空字符串或仅含特殊字符的关键词
+        // 3. 排除长度过短（≤2）或过长（≥20）的异常词
+        const filteredWords = words.filter(word => {
+          const text = word.text.trim().toLowerCase();
+          return (
+            !text.includes("...") &&  // 排除"..."
+            text.length > 2 &&         // 排除过短词
+            text.length < 20 &&        // 排除过长词
+            /^[a-zA-Z\s'-]+$/.test(text)  // 仅保留字母、空格、单引号、连字符（正常英文描述符）
+          );
+        });
+        
+        cleanedData[decade] = filteredWords;
+      });
+      
+      return cleanedData;
+    }
+
+    function initFilters() {
+      const decadeSelect = d3.select("#decadeFilter");
+
+      const decades = Array.from(new Set(allData.map(d => d.decade)))
+        .filter(d => d !== "Unknown")
+        .sort((a, b) => parseInt(a) - parseInt(b));
+
+      decadeSelect.append("option")
+        .attr("value", "all")
+        .text("全部年代");
+
+      decades.forEach(dec => {
+        decadeSelect.append("option")
+          .attr("value", dec)
+          .text(dec);
+      });
+
+      decadeSelect.on("change", () => {
+        currentDecade = decadeSelect.property("value");
+        renderAll();
+      });
+
+      const minSelect = d3.select("#minGenreCount");
+      currentMinGenreCount = +minSelect.property("value");
+      minSelect.on("change", () => {
+        currentMinGenreCount = +minSelect.property("value");
+        renderAll();
+      });
+    }
+
+    function getFilteredData() {
+      if (currentDecade === "all") return allData;
+      const start = parseInt(currentDecade);
+      const end = start + 10;
+      return allData.filter(d => d.year >= start && d.year < end);
+    }
+
+    function renderAll() {
+      const filtered = getFilteredData();
+      renderLineChart(filtered);
+      renderScatterChart(filtered);
+      renderHeatmap(filtered, currentMinGenreCount);
+      updateWordCloud(currentDecade); // 同步更新词云
+    }
+
+    /************** 2. 折线图：按年份数量 & 平均评分 **************/
+    function renderLineChart(data) {
+      const container = d3.select("#chart-line");
+      container.selectAll("*").remove();
+
+      if (!data.length) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      const margin = { top: 30, right: 50, bottom: 40, left: 50 };
+      const innerWidth = 400;
+      const innerHeight = 260;
+
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const yearMap = d3.rollups(
+        data,
+        v => ({
+          count: v.length,
+          avgRating: d3.mean(v, d => d.rating)
+        }),
+        d => d.year
+      );
+
+      let yearStats = yearMap.map(([year, stats]) => ({
+        year: +year,
+        count: stats.count,
+        avgRating: stats.avgRating
+      }));
+
+      yearStats.sort((a, b) => a.year - b.year);
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(yearStats, d => d.year))
+        .range([0, width]);
+
+      const yLeft = d3.scaleLinear()
+        .domain([0, d3.max(yearStats, d => d.count)]).nice()
+        .range([height, 0]);
+
+      const ratingMin = d3.min(yearStats, d => d.avgRating);
+      const ratingMax = d3.max(yearStats, d => d.avgRating);
+      const pad = 0.05;
+
+      const yRight = d3.scaleLinear()
+        .domain([ratingMin - pad, ratingMax + pad]).nice()
+        .range([height, 0]);
+
+      const xAxis = d3.axisBottom(x).tickFormat(d3.format("d"));
+      const yAxisLeft = d3.axisLeft(yLeft).ticks(4);
+      const yAxisRight = d3.axisRight(yRight).ticks(4);
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis);
+
+      g.append("g").call(yAxisLeft);
+
+      g.append("g")
+        .attr("transform", `translate(${width},0)`)
+        .call(yAxisRight);
+
+      g.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 30)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("年份");
+
+      g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -35)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("专辑数量");
+
+      g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", width + 40)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("平均评分");
+
+      const colorCount = "#1f77b4";
+      const colorRating = "#ff7f0e";
+
+      const lineCount = d3.line()
+        .x(d => x(d.year))
+        .y(d => yLeft(d.count))
+        .curve(d3.curveMonotoneX);
+
+      const lineRating = d3.line()
+        .x(d => x(d.year))
+        .y(d => yRight(d.avgRating))
+        .curve(d3.curveMonotoneX);
+
+      g.append("path")
+        .datum(yearStats)
+        .attr("fill", "none")
+        .attr("stroke", colorCount)
+        .attr("stroke-width", 2)
+        .attr("d", lineCount);
+
+      g.append("path")
+        .datum(yearStats)
+        .attr("fill", "none")
+        .attr("stroke", colorRating)
+        .attr("stroke-width", 2)
+        .attr("d", lineRating);
+
+      function showTooltip(event, d) {
+        tooltip
+          .style("opacity", 1)
+          .html(
+            `<strong>${d.year} 年</strong><br>
+             专辑数量: ${d.count}<br>
+             平均评分: ${d.avgRating.toFixed(2)}`
+          )
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px");
+      }
+
+      function moveTooltip(event) {
+        tooltip
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px");
+      }
+
+      function hideTooltip() {
+        tooltip.style("opacity", 0);
+      }
+
+      g.selectAll(".dot-count")
+        .data(yearStats)
+        .enter()
+        .append("circle")
+        .attr("class", "dot-count")
+        .attr("cx", d => x(d.year))
+        .attr("cy", d => yLeft(d.count))
+        .attr("r", 3)
+        .attr("fill", colorCount)
+        .on("mouseover", showTooltip)
+        .on("mousemove", moveTooltip)
+        .on("mouseout", hideTooltip);
+
+      g.selectAll(".dot-rating")
+        .data(yearStats)
+        .enter()
+        .append("circle")
+        .attr("class", "dot-rating")
+        .attr("cx", d => x(d.year))
+        .attr("cy", d => yRight(d.avgRating))
+        .attr("r", 3)
+        .attr("fill", colorRating)
+        .on("mouseover", showTooltip)
+        .on("mousemove", moveTooltip)
+        .on("mouseout", hideTooltip);
+
+      const legend = g.append("g")
+        .attr("transform", `translate(${width - 140}, 0)`);
+
+      const items = [
+        { name: "专辑数量（左轴）", color: colorCount },
+        { name: "平均评分（右轴）", color: colorRating }
+      ];
+
+      items.forEach((item, i) => {
+        const gl = legend.append("g")
+          .attr("transform", `translate(0, ${i * 18})`);
+
+        gl.append("line")
+          .attr("x1", 0)
+          .attr("x2", 18)
+          .attr("y1", 8)
+          .attr("y2", 8)
+          .attr("stroke", item.color)
+          .attr("stroke-width", 3);
+
+        gl.append("text")
+          .attr("x", 24)
+          .attr("y", 11)
+          .style("font-size", "9px")
+          .text(item.name);
+      });
+    }
+
+    /************** 3. 散点图：评分 vs 评分人数 **************/
+    function renderScatterChart(data) {
+      const container = d3.select("#chart-scatter");
+      container.selectAll("*").remove();
+
+      if (!data.length) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      const margin = { top: 30, right: 20, bottom: 50, left: 70 };
+      const innerWidth = 800;
+      const innerHeight = 450;
+
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const ratingExtent = d3.extent(data, d => d.rating);
+      const padding = 0.05;
+
+      const x = d3.scaleLinear()
+        .domain([ratingExtent[0] - padding, ratingExtent[1] + padding]).nice()
+        .range([0, width]);
+
+      const minNum = d3.min(data, d => d.numRatings);
+      const maxNum = d3.max(data, d => d.numRatings);
+
+      const y = d3.scaleLog()
+        .domain([Math.max(1, minNum), maxNum]).nice()
+        .range([height, 0]);
+
+      const xAxis = d3.axisBottom(x);
+      const yAxis = d3.axisLeft(y).ticks(8, "~s");
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(xAxis);
+
+      g.append("g").call(yAxis);
+
+      g.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 40)
+        .attr("text-anchor", "middle")
+        .style("font-size", "11px")
+        .text("平均评分");
+
+      g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -50)
+        .attr("text-anchor", "middle")
+        .style("font-size", "11px")
+        .text("评分人数（对数刻度）");
+
+      const decades = Array.from(new Set(data.map(d => d.decade)))
+        .sort((a, b) => {
+          if (a === "Unknown") return 1;
+          if (b === "Unknown") return -1;
+          return parseInt(a) - parseInt(b);
+        });
+
+      const palette = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+        "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        "#bcbd22", "#17becf", "#aec7e8", "#ffbb78"
+      ];
+
+      const color = d3.scaleOrdinal()
+        .domain(decades)
+        .range(palette);
+
+      g.selectAll(".dot")
+        .data(data)
+        .enter()
+        .append("circle")
+        .attr("class", "dot")
+        .attr("cx", d => x(d.rating))
+        .attr("cy", d => y(d.numRatings))
+        .attr("r", 2.5)
+        .attr("fill", d => color(d.decade))
+        .attr("fill-opacity", 0.7)
+        .on("mouseover", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.album}</strong><br/>
+               ${d.artist}${d.year ? " (" + d.year + ")" : ""}<br/>
+               评分：${d.rating.toFixed(2)}<br/>
+               评分人数：${d.numRatings.toLocaleString()}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      const ratingsSorted = data.map(d => d.rating).sort((a, b) => a - b);
+      const numsSorted = data.map(d => d.numRatings).sort((a, b) => a - b);
+      const ratingThreshold = d3.quantile(ratingsSorted, 0.7);
+      const numRatingsThreshold = d3.quantile(numsSorted, 0.7);
+
+      g.append("line")
+        .attr("x1", x(ratingThreshold))
+        .attr("x2", x(ratingThreshold))
+        .attr("y1", 0)
+        .attr("y2", height)
+        .attr("stroke", "#999")
+        .attr("stroke-dasharray", "4 4");
+
+      g.append("line")
+        .attr("x1", 0)
+        .attr("x2", width)
+        .attr("y1", y(numRatingsThreshold))
+        .attr("y2", y(numRatingsThreshold))
+        .attr("stroke", "#999")
+        .attr("stroke-dasharray", "4 4");
+
+      const padEdge = 10;
+
+      function styleRegionLabel(sel) {
+        sel
+          .style("font-size", "13px")
+          .style("font-weight", "bold")
+          .style("fill", "#444");
+      }
+
+      // 左上：爆火但评分一般
+      styleRegionLabel(
+        g.append("text")
+          .attr("x", padEdge)
+          .attr("y", padEdge + 12)
+          .attr("text-anchor", "start")
+          .text("爆火但评分一般")
+      );
+
+      // 右上：高分爆款
+      styleRegionLabel(
+        g.append("text")
+          .attr("x", width - padEdge)
+          .attr("y", padEdge + 12)
+          .attr("text-anchor", "end")
+          .text("高分爆款")
+      );
+
+      // 左下：小众且评分一般
+      styleRegionLabel(
+        g.append("text")
+          .attr("x", padEdge)
+          .attr("y", height - padEdge)
+          .attr("text-anchor", "start")
+          .text("小众且评分一般")
+      );
+
+      // 右下：高分冷门
+      styleRegionLabel(
+        g.append("text")
+          .attr("x", width - padEdge)
+          .attr("y", height - padEdge)
+          .attr("text-anchor", "end")
+          .text("高分冷门")
+      );
+
+      const legend = g.append("g")
+        .attr("transform", `translate(${width - 150}, 150)`);
+
+      const legendItem = legend.selectAll(".legend-item")
+        .data(decades)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 16})`);
+
+      legendItem.append("rect")
+        .attr("x", 0)
+        .attr("y", 2)
+        .attr("width", 10)
+        .attr("height", 10)
+        .attr("fill", d => color(d));
+
+      legendItem.append("text")
+        .attr("x", 16)
+        .attr("y", 11)
+        .style("font-size", "9px")
+        .text(d => d);
+    }
+
+    /************** 4. 热力图：音乐流派流行度 **************/
+    function renderHeatmap(data, minCount) {
+      const container = d3.select("#chart-heat");
+      container.selectAll("*").remove();
+
+      if (!data.length) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      const margin = { top: 30, right: 20, bottom: 40, left: 140 };
+      const innerWidth = 400;
+      const innerHeight = 320;
+
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+      const YEAR_BIN_SIZE = 10;
+
+      const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      data.forEach(d => {
+        d.yearBin = Math.floor(d.year / YEAR_BIN_SIZE) * YEAR_BIN_SIZE;
+      });
+
+      const genreCounts = {};
+      data.forEach(d => {
+        d.genreList.forEach(genre => {
+          genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+        });
+      });
+
+      const minCnt = +minCount;
+      const topGenres = Object.entries(genreCounts)
+        .filter(([_, c]) => c >= minCnt)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 18)
+        .map(([gName]) => gName);
+
+      if (!topGenres.length) {
+        g.append("text")
+          .attr("x", width / 2)
+          .attr("y", height / 2)
+          .attr("text-anchor", "middle")
+          .style("font-size", "11px")
+          .text("当前阈值下没有流派满足出现次数限制");
+        return;
+      }
+
+      const genreYearCounts = {};
+      topGenres.forEach(genre => {
+        genreYearCounts[genre] = {};
+      });
+
+      data.forEach(d => {
+        const yb = d.yearBin;
+        d.genreList.forEach(genre => {
+          if (topGenres.includes(genre)) {
+            if (!genreYearCounts[genre][yb]) genreYearCounts[genre][yb] = 0;
+            genreYearCounts[genre][yb]++;
+          }
+        });
+      });
+
+      const heatmapData = [];
+      topGenres.forEach(genre => {
+        Object.keys(genreYearCounts[genre]).forEach(yb => {
+          heatmapData.push({
+            genre,
+            yearBin: +yb,
+            count: genreYearCounts[genre][yb]
+          });
+        });
+      });
+
+      const maxCount = d3.max(heatmapData, d => d.count);
+
+      const yearBins = Array.from(new Set(heatmapData.map(d => d.yearBin)))
+        .sort((a, b) => a - b);
+
+      const xScale = d3.scaleBand()
+        .domain(yearBins)
+        .range([0, width])
+        .padding(0.05);
+
+      const yScale = d3.scaleBand()
+        .domain(topGenres.slice().reverse())
+        .range([0, height])
+        .padding(0.05);
+
+      /* 关键修改：使用普通线性颜色比例尺，避免 d3.interpolateYlOrRd 依赖 */
+      const colorScale = d3.scaleLinear()
+        .domain([0, maxCount * 0.5, maxCount])
+        .range(["#fff7ec", "#feb24c", "#f03b20"]);
+
+      g.selectAll(".heat-cell")
+        .data(heatmapData)
+        .enter()
+        .append("rect")
+        .attr("class", "heat-cell")
+        .attr("x", d => xScale(d.yearBin))
+        .attr("y", d => yScale(d.genre))
+        .attr("width", xScale.bandwidth())
+        .attr("height", yScale.bandwidth())
+        .attr("rx", 3)
+        .attr("ry", 3)
+        .attr("fill", d => colorScale(d.count))
+        .attr("stroke", "#fff")
+        .on("mouseover", (event, d) => {
+          const totalInBin = data.filter(item => item.yearBin === d.yearBin).length || 1;
+          const pct = (d.count / totalInBin) * 100;
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               年代：${d.yearBin}s<br/>
+               专辑数量：${d.count}<br/>
+               占该年代 Top5000 的 ${(pct).toFixed(1)}%`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(xScale).tickFormat(d => `${d}s`))
+        .selectAll("text")
+        .style("font-size", "10px");
+
+      g.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 32)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("年代");
+
+      g.append("g")
+        .call(d3.axisLeft(yScale))
+        .selectAll("text")
+        .style("font-size", "10px");
+
+      g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -120)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("音乐流派");
+
+      const legendWidth = 140;
+      const legendHeight = 10;
+
+      const legend = g.append("g")
+        .attr("transform", `translate(${width - legendWidth}, -22)`);
+
+      const defs = svg.append("defs");
+      const gradId = "legend-gradient-heat";
+      const gradient = defs.append("linearGradient")
+        .attr("id", gradId)
+        .attr("x1", "0%").attr("x2", "100%")
+        .attr("y1", "0%").attr("y2", "0%");
+
+      [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+        gradient.append("stop")
+          .attr("offset", `${t * 100}%`)
+          .attr("stop-color", colorScale(t * maxCount));
+      });
+
+      legend.append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", legendWidth)
+        .attr("height", legendHeight)
+        .attr("rx", 4)
+        .attr("ry", 4)
+        .style("fill", `url(#${gradId})`);
+
+      const legendScale = d3.scaleLinear()
+        .domain([0, maxCount])
+        .range([0, legendWidth]);
+
+      const legendAxis = d3.axisBottom(legendScale)
+        .ticks(4)
+        .tickFormat(d3.format("d"));
+
+      legend.append("g")
+        .attr("transform", `translate(0, ${legendHeight})`)
+        .call(legendAxis)
+        .selectAll("text")
+        .style("font-size", "9px");
+
+      legend.append("text")
+        .attr("x", legendWidth / 2)
+        .attr("y", -4)
+        .attr("text-anchor", "middle")
+        .style("font-size", "9px")
+        .text("该流派在该年代的专辑数量");
+    }
+
+    /************** 5. 词云图：专辑描述词云分析 **************/
+    function updateWordCloud(decade) {
+      const container = d3.select("#chart-wordcloud");
+      
+      // 清空现有内容
+      container.selectAll("svg").remove();
+      
+      // 获取容器尺寸（考虑内边距）
+      const containerNode = container.node();
+      const containerWidth = containerNode.clientWidth - 30; // 减去内边距
+      const containerHeight = containerNode.clientHeight - 30;
+      
+      if (containerWidth < 100 || containerHeight < 100) {
+        console.warn("词云容器尺寸过小:", containerWidth, containerHeight);
+        return;
+      }
+
+      // 处理年代映射（适配词云数据的格式）
+      let wordDecade = decade;
+      if (decade === "all") {
+        wordDecade = "all";
+      } else if (decade.endsWith("s")) {
+        wordDecade = decade.slice(0, -1); // 去掉"s"，如"1970s"转为"1970"
+      }
+
+      const wordsRaw = wordData[wordDecade] || wordData["all"];
+
+      if (!wordsRaw || wordsRaw.length === 0) {
+        const svg = container.append("svg")
+          .attr("width", "100%")
+          .attr("height", "100%");
+        
+        svg.append("text")
+          .attr("x", containerWidth / 2)
+          .attr("y", containerHeight / 2)
+          .attr("text-anchor", "middle")
+          .attr("font-size", "14px")
+          .attr("fill", "#666")
+          .text("No data available for this decade");
+        return;
+      }
+
+      // 按值降序排序并限制数量
+      const words = wordsRaw
+        .map(d => ({
+          text: d.text,
+          value: +d.value
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 100); // 限制最多100个词
+
+      const maxValue = d3.max(words, d => d.value);
+      const minValue = d3.min(words, d => d.value);
+      
+      // 创建SVG
+      const svg = container.append("svg")
+        .attr("width", containerWidth)
+        .attr("height", containerHeight)
+        .attr("viewBox", `0 0 ${containerWidth} ${containerHeight}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+      
+      const g = svg.append("g")
+        .attr("transform", `translate(${containerWidth / 2}, ${containerHeight / 2})`);
+
+      // 动态计算字体大小，确保大词能显示
+      const maxSize = Math.min(containerWidth, containerHeight) * 0.12;
+      const minSize = Math.min(containerWidth, containerHeight) * 0.02;
+      
+      const fontSizeScale = d3.scaleLinear()
+        .domain([minValue, maxValue])
+        .range([minSize, maxSize])
+        .clamp(true);
+
+      // 词云布局
+      const cloudLayout = d3.layout.cloud()
+        .size([containerWidth, containerHeight])
+        .words(words)
+        .padding(5)
+        .rotate(() => 0)
+        .font("Impact")
+        .fontSize(d => fontSizeScale(d.value))
+        .on("end", drawCloud);
+
+      cloudLayout.start();
+
+      function drawCloud(words) {
+        // 先移除可能已存在的文本
+        g.selectAll("text").remove();
+        
+        const wordElements = g.selectAll("text")
+          .data(words)
+          .enter()
+          .append("text")
+          .attr("class", "word")
+          .style("font-size", d => `${d.size}px`)
+          .style("font-family", d => d.font)
+          .style("fill", (d, i) => colorScale(i))
+          .attr("text-anchor", "middle")
+          .attr("transform", d => `translate(${d.x}, ${d.y}) rotate(${d.rotate})`)
+          .text(d => d.text)
+          .style("opacity", 0);
+
+        // 渐入动画
+        wordElements.transition()
+          .duration(600)
+          .delay((d, i) => i * 5)
+          .style("opacity", 1);
+
+        // 鼠标交互 - 使用全局统一的tooltip
+        wordElements
+          .on("mouseover", function(event, d) {
+            // 显示统一的tooltip
+            tooltip
+              .style("opacity", 1)
+              .html(`
+                <strong>${d.text}</strong><br>
+                出现次数：${d.value.toLocaleString()}<br>
+                年代：${decade === "all" ? "全部年代" : decade}
+              `)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY + 10) + "px");
+
+            // 简单的高亮效果
+            d3.select(this)
+              .style("cursor", "pointer");
+          })
+          .on("mousemove", function(event) {
+            // 跟随鼠标移动
+            tooltip
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY + 10) + "px");
+          })
+          .on("mouseout", function() {
+            // 隐藏tooltip
+            tooltip.style("opacity", 0);
+            d3.select(this)
+              .style("stroke", "none");
+          })
+          .on("click", function(event, d) {
+            event.stopPropagation();
+            alert(`关键词：${d.text}\n出现次数：${d.value.toLocaleString()}\n年代：${decade === "all" ? "全部年代" : decade}`);
+          });
+      }
+    }
+
+    // === 点击卡片跳转到各自的详情页 ===
+    document.addEventListener("DOMContentLoaded", () => {
+      const heatCard = document.getElementById("card-heat");
+      const scatterCard = document.getElementById("card-scatter");
+      const lineCard = document.getElementById("card-line");
+      const wordcloudCard = document.getElementById("card-wordcloud");
+
+      if (heatCard) {
+        heatCard.addEventListener("click", () => {
+          window.location.href = "heatmap_detail.html";
+        });
+      }
+
+      if (scatterCard) {
+        scatterCard.addEventListener("click", () => {
+          window.location.href = "scatter_detail.html";
+        });
+      }
+
+      if (lineCard) {
+        lineCard.addEventListener("click", () => {
+          window.location.href = "line_detail.html";
+        });
+      }
+
+      if (wordcloudCard) {
+        wordcloudCard.addEventListener("click", () => {
+          window.location.href = "wordcloud_detail.html";
+        });
+      }
+    });
+  </script>
+</body>
+</html>
