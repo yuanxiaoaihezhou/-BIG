@@ -301,7 +301,7 @@
               .html(
                 `<strong>${genreName}</strong><br/>
                  年代：${dataPoint.data.decade}<br/>
-                 占比：${percentage ? percentage.toFixed(2) : 0}%`
+                 占比：${percentage !== undefined ? percentage.toFixed(2) : 0}%`
               )
               .style("left", (event.pageX + 10) + "px")
               .style("top", (event.pageY + 10) + "px");
