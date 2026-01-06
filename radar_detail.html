@@ -185,9 +185,11 @@
       const decadeSelect = d3.select("#decadeSelect");
       const genreCountSelect = d3.select("#genreCount");
 
-      // 填充年代选项
+      // 填充年代选项 - 只添加有数据的年代
+      const uniqueDecades = new Set();
       radarData.forEach(d => {
-        if (d.genres && d.genres.length > 0) {
+        if (d.genres && d.genres.length > 0 && !uniqueDecades.has(d.decade)) {
+          uniqueDecades.add(d.decade);
           decadeSelect.append("option")
             .attr("value", d.decade)
             .text(d.decade);
