@@ -131,12 +131,6 @@
     </header>
 
     <div class="filter-bar">
-      <span>视图类型：</span>
-      <select id="viewType">
-        <option value="percentage">百分比视图</option>
-        <option value="count">绝对数量视图</option>
-      </select>
-
       <span>年代范围：</span>
       <select id="decadeRange">
         <option value="all">全部年代</option>
@@ -162,7 +156,6 @@
   <script>
     const DATA_FILE = "data/music_analysis_data.json";
     let stackedData = null;
-    let currentViewType = "percentage";
     let currentDecadeRange = "all";
 
     const tooltip = d3.select("#tooltip");
@@ -183,13 +176,7 @@
     });
 
     function initFilters() {
-      const viewTypeSelect = d3.select("#viewType");
       const decadeRangeSelect = d3.select("#decadeRange");
-
-      viewTypeSelect.on("change", () => {
-        currentViewType = viewTypeSelect.property("value");
-        renderChart();
-      });
 
       decadeRangeSelect.on("change", () => {
         currentDecadeRange = decadeRangeSelect.property("value");
@@ -265,7 +252,7 @@
         .padding(0.1);
 
       const yScale = d3.scaleLinear()
-        .domain([0, currentViewType === "percentage" ? 100 : d3.max(series, s => d3.max(s, d => d[1]))])
+        .domain([0, 100])
         .range([height, 0])
         .nice();
 
@@ -335,9 +322,8 @@
         .style("text-anchor", "end");
 
       // Y轴
-      const yAxisFormat = currentViewType === "percentage" ? d => d + "%" : d3.format("d");
       g.append("g")
-        .call(d3.axisLeft(yScale).ticks(8).tickFormat(yAxisFormat))
+        .call(d3.axisLeft(yScale).ticks(8).tickFormat(d => d + "%"))
         .selectAll("text")
         .style("font-size", "11px");
 
@@ -358,7 +344,7 @@
         .attr("text-anchor", "middle")
         .style("font-size", "13px")
         .style("fill", "#333")
-        .text(currentViewType === "percentage" ? "流派占比 (%)" : "专辑数量");
+        .text("流派占比 (%)");
 
       // 标题
       g.append("text")
