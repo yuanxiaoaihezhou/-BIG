@@ -182,6 +182,7 @@
       aspect-ratio: 4 / 3; 
       min-height: 280px; /* 确保词云有足够空间 */
     }
+    #card-stacked .chart-wrapper { aspect-ratio: 4 / 3; }
 
     .chart-wrapper svg {
       width: 100%;
@@ -193,6 +194,7 @@
     #card-scatter { grid-column: 2; grid-row: 1 / 3; }
     #card-line { grid-column: 3; grid-row: 1 / 2; }
     #card-wordcloud { grid-column: 3; grid-row: 2 / 3; }
+    #card-stacked { grid-column: 1; grid-row: 2 / 3; }
 
     /* tooltip 统一样式 */
     .tooltip {
@@ -243,7 +245,7 @@
         grid-template-columns: 1fr;
         grid-template-rows: auto;
       }
-      #card-heat, #card-scatter, #card-line, #card-wordcloud {
+      #card-heat, #card-scatter, #card-line, #card-wordcloud, #card-stacked {
         grid-column: auto;
         grid-row: auto;
       }
@@ -336,6 +338,13 @@
         </h3>
         <div class="chart-wrapper" id="chart-wordcloud"></div>
       </section>
+
+      <section class="chart-card" id="card-stacked">
+        <h3 class="chart-card-title pixel-text">
+          <span>CHART 05</span>流派演变堆叠面积图
+        </h3>
+        <div class="chart-wrapper" id="chart-stacked"></div>
+      </section>
     </main>
 
     <div class="footer">
@@ -353,11 +362,13 @@
     /************** 1. 全局数据 & 筛选状态 **************/
     const CSV_FILE = "rym_top_5000_all_time.csv";
     const WORDCLOUD_DATA_FILE = "decade_word_data.json";
+    const STACKED_DATA_FILE = "data/music_analysis_data.json";
 
     let allData = [];
     let currentDecade = "all";
     let currentMinGenreCount = 20;
     let wordData = {};
+    let stackedData = null;
     let resizeTimeout = null;
 
     const tooltip = d3.select("#tooltip");
@@ -366,14 +377,18 @@
     const colorScale = d3.scaleOrdinal()
       .range(d3.schemeCategory10);
 
-    // 先加载CSV数据，再加载词云数据
+    // 先加载CSV数据，再加载词云数据和堆叠图数据
     Promise.all([
       d3.csv(CSV_FILE),
       d3.json(WORDCLOUD_DATA_FILE).catch(error => {
         console.error("❌ 词频数据加载失败:", error);
         return null;
+      }),
+      d3.json(STACKED_DATA_FILE).catch(error => {
+        console.error("❌ 堆叠图数据加载失败:", error);
+        return null;
       })
-    ]).then(([csvData, wordJsonData]) => {
+    ]).then(([csvData, wordJsonData, stackedJsonData]) => {
       // 处理CSV数据
       allData = csvData.map(d => {
         const rating = +d["Average Rating"];
@@ -421,6 +436,12 @@
       if (wordJsonData) {
         wordData = cleanWordData(wordJsonData);
         console.log("✅ 词频数据加载并清洗完成", wordData);
+      }
+
+      // 处理堆叠图数据
+      if (stackedJsonData) {
+        stackedData = stackedJsonData;
+        console.log("✅ 堆叠图数据加载完成", stackedData);
       }
 
       initFilters();
@@ -512,6 +533,7 @@
       renderScatterChart(filtered);
       renderHeatmap(filtered, currentMinGenreCount);
       updateWordCloud(currentDecade); // 同步更新词云
+      renderStackedAreaChart(currentDecade); // 同步更新堆叠面积图
     }
 
     /************** 2. 折线图：按年份数量 & 平均评分 **************/
@@ -1274,12 +1296,189 @@
       }
     }
 
+    /************** 6. 堆叠面积图：流派演变 **************/
+    function renderStackedAreaChart(decade) {
+      const container = d3.select("#chart-stacked");
+      container.selectAll("*").remove();
+
+      if (!stackedData || !stackedData.percentage_data) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("数据加载失败");
+        return;
+      }
+
+      const margin = { top: 30, right: 20, bottom: 40, left: 50 };
+      const innerWidth = 400;
+      const innerHeight = 280;
+
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      // 根据筛选条件过滤数据
+      let percentageData = stackedData.percentage_data;
+      if (decade !== "all") {
+        // 如果选择了特定年代，只显示该年代的数据
+        const selectedDecade = decade.endsWith("s") ? decade : decade + "s";
+        percentageData = percentageData.filter(d => d.decade === selectedDecade);
+        
+        if (percentageData.length === 0) {
+          container.append("p")
+            .style("font-size", "11px")
+            .text("当前年代无数据");
+          return;
+        }
+      }
+
+      const genres = stackedData.genres;
+      const decades = percentageData.map(d => d.decade);
+
+      // 准备堆叠数据
+      const stack = d3.stack()
+        .keys(genres)
+        .order(d3.stackOrderNone)
+        .offset(d3.stackOffsetNone);
+
+      const series = stack(percentageData);
+
+      // 比例尺
+      const xScale = d3.scaleBand()
+        .domain(decades)
+        .range([0, width])
+        .padding(0.1);
+
+      const yScale = d3.scaleLinear()
+        .domain([0, 100])
+        .range([height, 0]);
+
+      // 颜色比例尺 - 使用与热力图一致的配色
+      const colorScale = d3.scaleOrdinal()
+        .domain(genres)
+        .range([
+          "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+          "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22"
+        ]);
+
+      // 面积生成器
+      const area = d3.area()
+        .x(d => xScale(d.data.decade) + xScale.bandwidth() / 2)
+        .y0(d => yScale(d[0]))
+        .y1(d => yScale(d[1]))
+        .curve(d3.curveMonotoneX);
+
+      // 绘制堆叠面积
+      g.selectAll(".layer")
+        .data(series)
+        .enter()
+        .append("path")
+        .attr("class", "layer")
+        .attr("d", area)
+        .attr("fill", d => colorScale(d.key))
+        .attr("opacity", 0.8)
+        .on("mouseover", function(event, d) {
+          d3.select(this).attr("opacity", 1);
+          
+          // 获取鼠标位置对应的年代
+          const [mouseX] = d3.pointer(event, g.node());
+          const decadeIndex = Math.floor(mouseX / (width / decades.length));
+          const decadeData = d.data ? d.data : (d[decadeIndex] ? d[decadeIndex].data : null);
+          
+          if (decadeData) {
+            const genreName = d.key;
+            const percentage = decadeData[genreName];
+            
+            tooltip
+              .style("opacity", 1)
+              .html(
+                `<strong>${genreName}</strong><br/>
+                 年代：${decadeData.decade}<br/>
+                 占比：${percentage ? percentage.toFixed(2) : 0}%`
+              )
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY + 10) + "px");
+          }
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("opacity", 0.8);
+          tooltip.style("opacity", 0);
+        });
+
+      // X轴
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll("text")
+        .style("font-size", "9px")
+        .attr("transform", "rotate(-20)")
+        .style("text-anchor", "end");
+
+      // Y轴
+      g.append("g")
+        .call(d3.axisLeft(yScale).ticks(5).tickFormat(d => d + "%"))
+        .selectAll("text")
+        .style("font-size", "9px");
+
+      // X轴标签
+      g.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 36)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("年代");
+
+      // Y轴标签
+      g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -35)
+        .attr("text-anchor", "middle")
+        .style("font-size", "10px")
+        .text("流派占比 (%)");
+
+      // 图例
+      const legend = g.append("g")
+        .attr("transform", `translate(${width - 140}, 0)`);
+
+      const legendItems = legend.selectAll(".legend-item")
+        .data(genres)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 14})`);
+
+      legendItems.append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", 10)
+        .attr("height", 10)
+        .attr("fill", d => colorScale(d));
+
+      legendItems.append("text")
+        .attr("x", 14)
+        .attr("y", 9)
+        .style("font-size", "8px")
+        .text(d => d.length > 12 ? d.substring(0, 12) + "..." : d);
+    }
+
     // === 点击卡片跳转到各自的详情页 ===
     document.addEventListener("DOMContentLoaded", () => {
       const heatCard = document.getElementById("card-heat");
       const scatterCard = document.getElementById("card-scatter");
       const lineCard = document.getElementById("card-line");
       const wordcloudCard = document.getElementById("card-wordcloud");
+      const stackedCard = document.getElementById("card-stacked");
 
       if (heatCard) {
         heatCard.addEventListener("click", () => {
@@ -1302,6 +1501,12 @@
       if (wordcloudCard) {
         wordcloudCard.addEventListener("click", () => {
           window.location.href = "wordcloud_detail.html";
+        });
+      }
+
+      if (stackedCard) {
+        stackedCard.addEventListener("click", () => {
+          window.location.href = "stacked_detail.html";
         });
       }
     });

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>流派演变堆叠面积图 · 详情页</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background:#000;
+      color:#fff;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      padding:24px 16px 40px;
+      position:relative;
+      overflow-x:hidden;
+    }
+    .checkerboard {
+      position:fixed; inset:0; z-index:0; overflow:hidden;
+    }
+    .distortion {
+      position:absolute; inset:0;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="50" height="50" fill="%23FF4500"/><rect x="50" y="50" width="50" height="50" fill="%23ADFF2F"/><rect x="50" width="50" height="50" fill="%23ADFF2F"/><rect y="50" width="50" height="50" fill="%23FF4500"/><rect x="25" y="25" width="50" height="50" fill="%23FF4500"/><rect x="75" y="75" width="50" height="50" fill="%23ADFF2F"/></svg>');
+      background-size:40px 40px;
+      opacity:.85;
+      transform:scale(1.5);
+      animation:wave 8s ease-in-out infinite alternate;
+    }
+    @keyframes wave{
+      0%{transform:scale(1.5) rotate(0deg);}
+      100%{transform:scale(1.7) rotate(8deg);}
+    }
+    .page-inner{ position:relative; z-index:1; width:100%; max-width:1400px; }
+
+    .header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+    .header-title{
+      font-size:18px;
+      text-shadow:3px 3px 0 #ff4500;
+    }
+    .header-right a{
+      font-size:10px;
+      color:#ADFF2F;
+      text-decoration:none;
+    }
+    .header-right a:hover{ text-decoration:underline; }
+
+    .filter-bar{
+      margin-bottom:18px;
+      padding:10px 16px;
+      border-radius:16px;
+      background:rgba(0,0,0,.6);
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px 16px;
+      align-items:center;
+      justify-content:flex-start;
+      font-size:10px;
+      color:#ADFF2F;
+      box-shadow:0 0 16px rgba(0,0,0,.6);
+    }
+    .filter-bar select{
+      font-family:inherit;
+      font-size:10px;
+      padding:5px 10px;
+      border-radius:10px;
+      border:1px solid #444;
+      background:#FFFAF0;
+      color:#000;
+      box-shadow:0 0 8px rgba(0,0,0,.5);
+      cursor:pointer;
+    }
+    .chart-card{
+      background:rgba(255,251,244,.96);
+      border-radius:28px;
+      box-shadow:0 16px 40px rgba(0,0,0,.4);
+      padding:20px 24px 24px;
+      color:#333;
+      display:flex;
+      flex-direction:column;
+    }
+    .chart-title{
+      font-size:13px;
+      margin-bottom:14px;
+      color:#333;
+    }
+    .chart-wrapper{
+      flex:1;
+      position:relative;
+      aspect-ratio:16/9;
+      min-height:500px;
+    }
+    .chart-wrapper svg{ width:100%; height:100%; display:block; }
+
+    .tooltip{
+      position:absolute;
+      background:rgba(255,255,255,.97);
+      border:1px solid #ccc;
+      padding:8px 12px;
+      font-size:12px;
+      pointer-events:none;
+      border-radius:4px;
+      box-shadow:0 0 6px rgba(0,0,0,.35);
+      color:#333;
+      z-index:99;
+    }
+    .footer{
+      margin-top:14px;
+      text-align:center;
+      font-size:9px;
+      color:#ADFF2F;
+    }
+
+    @media(max-width:900px){
+      .chart-wrapper{ aspect-ratio:4/3; min-height:400px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="checkerboard"><div class="distortion"></div></div>
+
+  <div class="page-inner">
+    <header class="header">
+      <h1 class="header-title">GENRE EVOLUTION · DETAIL VIEW</h1>
+      <div class="header-right">
+        <a href="charts_hub.html">← 返回总览</a>
+      </div>
+    </header>
+
+    <div class="filter-bar">
+      <span>视图类型：</span>
+      <select id="viewType">
+        <option value="percentage">百分比视图</option>
+        <option value="count">绝对数量视图</option>
+      </select>
+
+      <span>年代范围：</span>
+      <select id="decadeRange">
+        <option value="all">全部年代</option>
+        <option value="early">早期 (1940s-1970s)</option>
+        <option value="middle">中期 (1980s-2000s)</option>
+        <option value="recent">近期 (2010s-2020s)</option>
+      </select>
+    </div>
+
+    <div class="chart-card">
+      <h3 class="chart-title">流派在各年代的分布演变 - 展示音乐流派如何随时间变化</h3>
+      <div class="chart-wrapper" id="chart"></div>
+    </div>
+
+    <div class="footer">
+      数据来源：<a href="https://rateyourmusic.com" target="_blank" style="color:#ADFF2F;">RateYourMusic</a> ·
+      © 2025 Group NiuMa
+    </div>
+  </div>
+
+  <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+
+  <script>
+    const DATA_FILE = "data/music_analysis_data.json";
+    let stackedData = null;
+    let currentViewType = "percentage";
+    let currentDecadeRange = "all";
+
+    const tooltip = d3.select("#tooltip");
+
+    // 加载数据
+    d3.json(DATA_FILE).then(data => {
+      stackedData = data;
+      console.log("✅ 数据加载完成", stackedData);
+      
+      initFilters();
+      renderChart();
+    }).catch(err => {
+      console.error("❌ 数据加载失败:", err);
+      d3.select("#chart").append("p")
+        .style("font-size", "14px")
+        .style("color", "#666")
+        .text("数据加载失败，请检查文件路径");
+    });
+
+    function initFilters() {
+      const viewTypeSelect = d3.select("#viewType");
+      const decadeRangeSelect = d3.select("#decadeRange");
+
+      viewTypeSelect.on("change", () => {
+        currentViewType = viewTypeSelect.property("value");
+        renderChart();
+      });
+
+      decadeRangeSelect.on("change", () => {
+        currentDecadeRange = decadeRangeSelect.property("value");
+        renderChart();
+      });
+    }
+
+    function renderChart() {
+      const container = d3.select("#chart");
+      container.selectAll("*").remove();
+
+      if (!stackedData || !stackedData.percentage_data) {
+        container.append("p")
+          .style("font-size", "14px")
+          .text("数据加载失败");
+        return;
+      }
+
+      const margin = { top: 40, right: 200, bottom: 60, left: 80 };
+      const containerNode = container.node();
+      const containerWidth = containerNode.clientWidth;
+      const containerHeight = containerNode.clientHeight;
+
+      const width = containerWidth - margin.left - margin.right;
+      const height = containerHeight - margin.top - margin.bottom;
+
+      const svg = container.append("svg")
+        .attr("width", containerWidth)
+        .attr("height", containerHeight);
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      // 根据筛选条件过滤数据
+      let percentageData = stackedData.percentage_data;
+      
+      if (currentDecadeRange === "early") {
+        percentageData = percentageData.filter(d => 
+          ["1940s", "1950s", "1960s", "1970s"].includes(d.decade)
+        );
+      } else if (currentDecadeRange === "middle") {
+        percentageData = percentageData.filter(d => 
+          ["1980s", "1990s", "2000s"].includes(d.decade)
+        );
+      } else if (currentDecadeRange === "recent") {
+        percentageData = percentageData.filter(d => 
+          ["2010s", "2020s"].includes(d.decade)
+        );
+      }
+
+      if (percentageData.length === 0) {
+        container.append("p")
+          .style("font-size", "14px")
+          .text("当前筛选条件下无数据");
+        return;
+      }
+
+      const genres = stackedData.genres;
+      const decades = percentageData.map(d => d.decade);
+
+      // 准备堆叠数据
+      const stack = d3.stack()
+        .keys(genres)
+        .order(d3.stackOrderNone)
+        .offset(d3.stackOffsetNone);
+
+      const series = stack(percentageData);
+
+      // 比例尺
+      const xScale = d3.scaleBand()
+        .domain(decades)
+        .range([0, width])
+        .padding(0.1);
+
+      const yScale = d3.scaleLinear()
+        .domain([0, currentViewType === "percentage" ? 100 : d3.max(series, s => d3.max(s, d => d[1]))])
+        .range([height, 0])
+        .nice();
+
+      // 颜色比例尺
+      const colorScale = d3.scaleOrdinal()
+        .domain(genres)
+        .range([
+          "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+          "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22"
+        ]);
+
+      // 面积生成器
+      const area = d3.area()
+        .x(d => xScale(d.data.decade) + xScale.bandwidth() / 2)
+        .y0(d => yScale(d[0]))
+        .y1(d => yScale(d[1]))
+        .curve(d3.curveMonotoneX);
+
+      // 绘制堆叠面积
+      const layers = g.selectAll(".layer")
+        .data(series)
+        .enter()
+        .append("path")
+        .attr("class", "layer")
+        .attr("d", area)
+        .attr("fill", d => colorScale(d.key))
+        .attr("opacity", 0.8)
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 0.5);
+
+      // 添加交互
+      layers.on("mouseover", function(event, d) {
+          d3.select(this).attr("opacity", 1).attr("stroke-width", 2);
+        })
+        .on("mousemove", function(event, d) {
+          const [mouseX] = d3.pointer(event, g.node());
+          const decadeIndex = Math.min(Math.floor(mouseX / (width / decades.length)), decades.length - 1);
+          
+          if (decadeIndex >= 0 && decadeIndex < d.length) {
+            const dataPoint = d[decadeIndex];
+            const genreName = d.key;
+            const percentage = dataPoint.data[genreName];
+            
+            tooltip
+              .style("opacity", 1)
+              .html(
+                `<strong>${genreName}</strong><br/>
+                 年代：${dataPoint.data.decade}<br/>
+                 占比：${percentage ? percentage.toFixed(2) : 0}%`
+              )
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY + 10) + "px");
+          }
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("opacity", 0.8).attr("stroke-width", 0.5);
+          tooltip.style("opacity", 0);
+        });
+
+      // X轴
+      g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll("text")
+        .style("font-size", "11px")
+        .attr("transform", "rotate(-30)")
+        .style("text-anchor", "end");
+
+      // Y轴
+      const yAxisFormat = currentViewType === "percentage" ? d => d + "%" : d3.format("d");
+      g.append("g")
+        .call(d3.axisLeft(yScale).ticks(8).tickFormat(yAxisFormat))
+        .selectAll("text")
+        .style("font-size", "11px");
+
+      // X轴标签
+      g.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 50)
+        .attr("text-anchor", "middle")
+        .style("font-size", "13px")
+        .style("fill", "#333")
+        .text("年代");
+
+      // Y轴标签
+      g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -height / 2)
+        .attr("y", -55)
+        .attr("text-anchor", "middle")
+        .style("font-size", "13px")
+        .style("fill", "#333")
+        .text(currentViewType === "percentage" ? "流派占比 (%)" : "专辑数量");
+
+      // 标题
+      g.append("text")
+        .attr("x", width / 2)
+        .attr("y", -20)
+        .attr("text-anchor", "middle")
+        .style("font-size", "14px")
+        .style("font-weight", "bold")
+        .style("fill", "#333")
+        .text("Top 5000 专辑流派演变趋势");
+
+      // 图例
+      const legend = g.append("g")
+        .attr("transform", `translate(${width + 20}, 0)`);
+
+      const legendItems = legend.selectAll(".legend-item")
+        .data(genres)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 22})`)
+        .style("cursor", "pointer");
+
+      legendItems.append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("rx", 3)
+        .attr("fill", d => colorScale(d));
+
+      legendItems.append("text")
+        .attr("x", 22)
+        .attr("y", 13)
+        .style("font-size", "11px")
+        .style("fill", "#333")
+        .text(d => d);
+
+      // 图例交互
+      legendItems.on("mouseover", function(event, genre) {
+          layers.attr("opacity", d => d.key === genre ? 1 : 0.2);
+        })
+        .on("mouseout", function() {
+          layers.attr("opacity", 0.8);
+        });
+    }
+  </script>
+</body>
+</html>
