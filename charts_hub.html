@@ -182,6 +182,7 @@
       aspect-ratio: 4 / 3; 
       min-height: 280px; /* 确保词云有足够空间 */
     }
+    #card-stacked .chart-wrapper { aspect-ratio: 4 / 3; }
 
     .chart-wrapper svg {
       width: 100%;
@@ -193,6 +194,7 @@
     #card-scatter { grid-column: 2; grid-row: 1 / 3; }
     #card-line { grid-column: 3; grid-row: 1 / 2; }
     #card-wordcloud { grid-column: 3; grid-row: 2 / 3; }
+    #card-stacked { grid-column: 1; grid-row: 2 / 3; }
 
     /* tooltip 统一样式 */
     .tooltip {
@@ -243,7 +245,7 @@
         grid-template-columns: 1fr;
         grid-template-rows: auto;
       }
-      #card-heat, #card-scatter, #card-line, #card-wordcloud {
+      #card-heat, #card-scatter, #card-line, #card-wordcloud, #card-stacked {
         grid-column: auto;
         grid-row: auto;
       }
@@ -307,7 +309,7 @@
       </select>
     </div>
 
-    <!-- 四张图表 -->
+    <!-- 五张图表 -->
     <main class="charts-grid">
       <section class="chart-card" id="card-heat">
         <h3 class="chart-card-title pixel-text">
@@ -336,6 +338,13 @@
         </h3>
         <div class="chart-wrapper" id="chart-wordcloud"></div>
       </section>
+
+      <section class="chart-card" id="card-stacked">
+        <h3 class="chart-card-title pixel-text">
+          <span>CHART 05</span>流派评分雷达图
+        </h3>
+        <div class="chart-wrapper" id="chart-stacked"></div>
+      </section>
     </main>
 
     <div class="footer">
@@ -353,11 +362,13 @@
     /************** 1. 全局数据 & 筛选状态 **************/
     const CSV_FILE = "rym_top_5000_all_time.csv";
     const WORDCLOUD_DATA_FILE = "decade_word_data.json";
+    const RADAR_DATA_FILE = "genre_rating_data.json";
 
     let allData = [];
     let currentDecade = "all";
     let currentMinGenreCount = 20;
     let wordData = {};
+    let radarData = null;
     let resizeTimeout = null;
 
     const tooltip = d3.select("#tooltip");
@@ -366,14 +377,18 @@
     const colorScale = d3.scaleOrdinal()
       .range(d3.schemeCategory10);
 
-    // 先加载CSV数据，再加载词云数据
+    // 先加载CSV数据，再加载词云数据和雷达图数据
     Promise.all([
       d3.csv(CSV_FILE),
       d3.json(WORDCLOUD_DATA_FILE).catch(error => {
         console.error("❌ 词频数据加载失败:", error);
         return null;
+      }),
+      d3.json(RADAR_DATA_FILE).catch(error => {
+        console.error("❌ 雷达图数据加载失败:", error);
+        return null;
       })
-    ]).then(([csvData, wordJsonData]) => {
+    ]).then(([csvData, wordJsonData, radarJsonData]) => {
       // 处理CSV数据
       allData = csvData.map(d => {
         const rating = +d["Average Rating"];
@@ -421,6 +436,12 @@
       if (wordJsonData) {
         wordData = cleanWordData(wordJsonData);
         console.log("✅ 词频数据加载并清洗完成", wordData);
+      }
+
+      // 处理雷达图数据
+      if (radarJsonData) {
+        radarData = radarJsonData;
+        console.log("✅ 雷达图数据加载完成", radarData);
       }
 
       initFilters();
@@ -512,6 +533,7 @@
       renderScatterChart(filtered);
       renderHeatmap(filtered, currentMinGenreCount);
       updateWordCloud(currentDecade); // 同步更新词云
+      renderRadarChart(currentDecade); // 同步更新雷达图
     }
 
     /************** 2. 折线图：按年份数量 & 平均评分 **************/
@@ -1274,12 +1296,199 @@
       }
     }
 
+    /************** 6. 雷达图：流派评分对比 **************/
+    function renderRadarChart(decade) {
+      const container = d3.select("#chart-stacked");
+      container.selectAll("*").remove();
+
+      if (!radarData) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("数据加载失败");
+        return;
+      }
+
+      const margin = { top: 40, right: 80, bottom: 40, left: 80 };
+      const innerWidth = 400;
+      const innerHeight = 280;
+
+      const width = innerWidth - margin.left - margin.right;
+      const height = innerHeight - margin.top - margin.bottom;
+      const radius = Math.min(width, height) / 2.5; // 缩小雷达图以避免标签覆盖
+
+      const svg = container.append("svg")
+        .attr("viewBox", `0 0 ${innerWidth} ${innerHeight}`)
+        .attr("preserveAspectRatio", "xMidYMid meet");
+
+      const g = svg.append("g")
+        .attr("transform", `translate(${innerWidth / 2},${innerHeight / 2})`);
+
+      // 根据筛选条件获取数据
+      let decadeData;
+      if (decade === "all") {
+        // 显示所有年代的平均
+        decadeData = { decade: "all", genres: [] };
+        const genreMap = {};
+        
+        radarData.forEach(d => {
+          d.genres.forEach(g => {
+            if (!genreMap[g.genre]) {
+              genreMap[g.genre] = { genre: g.genre, ratings: [], count: 0 };
+            }
+            genreMap[g.genre].ratings.push(g.avg_rating);
+            genreMap[g.genre].count++;
+          });
+        });
+
+        decadeData.genres = Object.values(genreMap).map(g => ({
+          genre: g.genre,
+          avg_rating: d3.mean(g.ratings)
+        })).filter(g => g.avg_rating); // 过滤掉无效数据
+      } else {
+        // 显示特定年代
+        const selectedDecade = decade.endsWith("s") ? decade : decade + "s";
+        decadeData = radarData.find(d => d.decade === selectedDecade);
+      }
+
+      if (!decadeData || !decadeData.genres || decadeData.genres.length === 0) {
+        container.append("p")
+          .style("font-size", "11px")
+          .text("当前年代无数据");
+        return;
+      }
+
+      // 选择评分最高的前8个流派
+      const topGenres = decadeData.genres
+        .sort((a, b) => b.avg_rating - a.avg_rating)
+        .slice(0, 8);
+
+      const levels = 5;
+      const minRating = 3.6;
+      const maxRating = 4.0;
+
+      // 创建径向比例尺
+      const rScale = d3.scaleLinear()
+        .domain([minRating, maxRating])
+        .range([0, radius]);
+
+      // 创建角度比例尺
+      const angleSlice = (Math.PI * 2) / topGenres.length;
+
+      // 绘制同心圆网格
+      const axisGrid = g.append("g").attr("class", "axisWrapper");
+
+      // 绘制同心圆
+      axisGrid.selectAll(".gridCircle")
+        .data(d3.range(1, levels + 1).reverse())
+        .enter()
+        .append("circle")
+        .attr("class", "gridCircle")
+        .attr("r", d => (radius / levels) * d)
+        .style("fill", "#f5f5f5")
+        .style("stroke", "#ccc")
+        .style("stroke-width", "1px")
+        .style("fill-opacity", 0.3);
+
+      // 绘制坐标轴线
+      const axis = axisGrid.selectAll(".axis")
+        .data(topGenres)
+        .enter()
+        .append("g")
+        .attr("class", "axis");
+
+      axis.append("line")
+        .attr("x1", 0)
+        .attr("y1", 0)
+        .attr("x2", (d, i) => rScale(maxRating) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y2", (d, i) => rScale(maxRating) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("stroke", "#999")
+        .style("stroke-width", "1px");
+
+      // 添加坐标轴标签
+      const MAX_GENRE_NAME_LENGTH = 10;
+      axis.append("text")
+        .attr("class", "legend")
+        .style("font-size", "8px")
+        .style("fill", "#333")
+        .style("font-weight", "bold")
+        .attr("text-anchor", "middle")
+        .attr("dy", "0.35em")
+        .attr("x", (d, i) => (rScale(maxRating) + 25) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("y", (d, i) => (rScale(maxRating) + 25) * Math.sin(angleSlice * i - Math.PI / 2))
+        .text(d => d.genre.length > MAX_GENRE_NAME_LENGTH ? d.genre.substring(0, MAX_GENRE_NAME_LENGTH) + "..." : d.genre);
+
+      // 准备雷达图数据
+      const radarLine = d3.lineRadial()
+        .radius(d => rScale(d.avg_rating))
+        .angle((d, i) => i * angleSlice)
+        .curve(d3.curveLinearClosed);
+
+      // 绘制雷达图区域
+      const radarArea = g.append("path")
+        .datum(topGenres)
+        .attr("d", radarLine)
+        .style("fill", "#ff7f0e")
+        .style("fill-opacity", 0.4)
+        .style("stroke", "#ff7f0e")
+        .style("stroke-width", "2px");
+
+      // 绘制数据点
+      const dots = g.selectAll(".radarCircle")
+        .data(topGenres)
+        .enter()
+        .append("circle")
+        .attr("class", "radarCircle")
+        .attr("r", 4)
+        .attr("cx", (d, i) => rScale(d.avg_rating) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("cy", (d, i) => rScale(d.avg_rating) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("fill", "#ff7f0e")
+        .style("stroke", "#fff")
+        .style("stroke-width", "2px");
+
+      // 添加交互
+      dots.on("mouseover", function(event, d) {
+          d3.select(this).attr("r", 6);
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.genre}</strong><br/>
+               平均评分：${d.avg_rating.toFixed(3)}<br/>
+               年代：${decade === "all" ? "全部年代" : decade}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mousemove", (event) => {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("r", 4);
+          tooltip.style("opacity", 0);
+        });
+
+      // 添加评分刻度标签
+      const ratingLabels = g.append("g").attr("class", "rating-labels");
+      
+      d3.range(1, levels + 1).forEach(level => {
+        const rating = minRating + (maxRating - minRating) * (level / levels);
+        ratingLabels.append("text")
+          .attr("x", 5)
+          .attr("y", -rScale(rating))
+          .style("font-size", "8px")
+          .style("fill", "#666")
+          .text(rating.toFixed(2));
+      });
+    }
+
     // === 点击卡片跳转到各自的详情页 ===
     document.addEventListener("DOMContentLoaded", () => {
       const heatCard = document.getElementById("card-heat");
       const scatterCard = document.getElementById("card-scatter");
       const lineCard = document.getElementById("card-line");
       const wordcloudCard = document.getElementById("card-wordcloud");
+      const stackedCard = document.getElementById("card-stacked");
 
       if (heatCard) {
         heatCard.addEventListener("click", () => {
@@ -1302,6 +1511,12 @@
       if (wordcloudCard) {
         wordcloudCard.addEventListener("click", () => {
           window.location.href = "wordcloud_detail.html";
+        });
+      }
+
+      if (stackedCard) {
+        stackedCard.addEventListener("click", () => {
+          window.location.href = "radar_detail.html";
         });
       }
     });
